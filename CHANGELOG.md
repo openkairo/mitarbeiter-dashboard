@@ -12,6 +12,10 @@ Veröffentlichen wird daraus eine Nummer nach Haupt.Neben.Korrektur — die
 Nummer wächst also nur, wenn ein Stand bewusst freigegeben wird, nicht bei
 jedem einzelnen Arbeitsschritt.
 
+- Das Repo ist **öffentlich**. Der Server liest die Updates seither über
+  HTTPS statt über einen Bereitstellungsschlüssel — nichts zu verwalten,
+  nichts zu widerrufen. `update-einrichten.sh` erkennt das selbst und legt
+  nur bei einem privaten Repo noch einen Schlüssel an.
 - **`install.sh` richtet eine Instanz auf einem frischen Server ein** und
   prüft vorher die Voraussetzungen: Docker, Traefik samt externem Netz und
   Zertifikatsauflöser, und ob der A-Eintrag wirklich auf diesen Server zeigt.

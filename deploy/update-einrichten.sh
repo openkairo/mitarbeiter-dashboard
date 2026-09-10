@@ -22,6 +22,18 @@ REPO_NAME="${UPDATE_REPO:-openkairo/mitarbeiter-dashboard}"
 
 fern() { ssh -i "$SSH_KEY" -o ConnectTimeout=15 "$SERVER" "$@"; }
 
+# Ist das Repo oeffentlich, braucht der Server keinen Schluessel: Lesen geht
+# dann ueber HTTPS, und es gibt nichts zu verwalten, zu widerrufen oder zu
+# verlieren. Der Schluesselweg bleibt fuer private Repos.
+OEFFENTLICH=""
+if curl -fsS -o /dev/null -H "Authorization:" \
+     "https://api.github.com/repos/$REPO_NAME" 2>/dev/null; then
+    OEFFENTLICH="ja"
+    echo "▸ 1/4  Repo ist öffentlich — kein Schlüssel nötig"
+    echo "  ✓ der Server liest über HTTPS"
+fi
+
+if [[ -z "$OEFFENTLICH" ]]; then
 echo "▸ 1/4  Schlüssel auf dem Server anlegen"
 fern "mkdir -p /opt/smg-update && test -f /root/.ssh/id_smg_repo || \
       ssh-keygen -t ed25519 -N '' -C 'smg-update (nur lesend)' -f /root/.ssh/id_smg_repo -q"
@@ -40,12 +52,16 @@ else
     rm -f /tmp/smg-update.pub
     echo "  ✓ eingetragen"
 fi
+fi
 
 echo "▸ 3/4  Arbeitskopie holen"
 # Der Host-Eintrag steht in einer eigenen Datei und wird eingebunden — eine
 # bestehende ~/.ssh/config bleibt dabei unangetastet. Fehlt sie, wird sie
 # angelegt; `Include` muss dabei ganz oben stehen.
-fern "mkdir -p /root/.ssh && chmod 700 /root/.ssh
+URSPRUNG_SETZEN=""
+[[ -n "$OEFFENTLICH" ]] && URSPRUNG_SETZEN="URSPRUNG=https://github.com/$REPO_NAME.git"
+fern "$URSPRUNG_SETZEN
+mkdir -p /root/.ssh && chmod 700 /root/.ssh
 cat > /root/.ssh/config.d_smg <<'EOF'
 Host github-smg
   HostName github.com
@@ -62,11 +78,13 @@ if ! grep -q 'config.d_smg' /root/.ssh/config; then
   mv /tmp/sshcfg /root/.ssh/config
 fi
 chmod 600 /root/.ssh/config
+URSPRUNG=${URSPRUNG:-git@github-smg:$REPO_NAME.git}
 if [ -d /opt/smg-update/repo/.git ]; then
-  git -C /opt/smg-update/repo remote set-url origin git@github-smg:$REPO_NAME.git
+  git -C /opt/smg-update/repo remote set-url origin \$URSPRUNG
   git -C /opt/smg-update/repo fetch --quiet origin main
+  git -C /opt/smg-update/repo reset --hard --quiet origin/main
 else
-  git clone --quiet git@github-smg:$REPO_NAME.git /opt/smg-update/repo
+  git clone --quiet \$URSPRUNG /opt/smg-update/repo
 fi
 git -C /opt/smg-update/repo rev-parse --short=8 origin/main"
 echo "  ✓ Arbeitskopie steht"
