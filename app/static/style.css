@@ -1,0 +1,1038 @@
+/* Dashboard.
+   Helle Flaeche, dunkle Seitenleiste, Kacheln mit viel Luft — nach der
+   Vorlage. Eine Akzentfarbe (Blau), vier Ampelfarben, sonst nichts Buntes.
+   Alles Anfassbare ist mindestens 44 Pixel hoch: bedient wird das auch am
+   Telefon, oft im Stehen.
+
+   Kein Flex-`gap` in dieser Datei — iOS 12 (iPhone 6) kennt es nur im
+   Grid. Wo Abstand noetig ist, steht margin. */
+
+:root {
+  color-scheme: light;
+  --grund: #eef2f8;
+  --karte: #ffffff;
+  --karte-still: #f6f8fc;
+  --rand: #e2e8f2;
+  --text: #16202b;
+  --text-leise: #6b7a8d;
+  --leiste: #14294a;
+  --leiste-hoch: #1d3a63;
+  --leiste-text: #cfdcf0;
+  --akzent: #2f6fed;
+  --akzent-still: #e7efff;
+  --rot: #dc3b3b;
+  --rot-still: #fdeaea;
+  --gelb: #b5820b;
+  --gelb-still: #fdf3dc;
+  --gruen: #1f9d61;
+  --gruen-still: #e4f6ed;
+  --blau: #2f6fed;
+  --blau-still: #e7efff;
+  --schatten: 0 2px 6px rgba(20, 45, 90, .05), 0 12px 28px rgba(20, 45, 90, .06);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --grund: #0f151d;
+  --karte: #182029;
+  --karte-still: #1e2732;
+  --rand: #2a3442;
+  --text: #e9edf2;
+  --text-leise: #8d9bab;
+  --leiste: #131b25;
+  --leiste-hoch: #1e2937;
+  --leiste-text: #b9c6d6;
+  --akzent: #5b9dd9;
+  --akzent-still: #1b2b3d;
+  --rot: #e57366;
+  --rot-still: #33211f;
+  --gelb: #e0b341;
+  --gelb-still: #33291a;
+  --gruen: #4caf7d;
+  --gruen-still: #162d24;
+  --blau: #5b9dd9;
+  --blau-still: #17293a;
+  --schatten: 0 2px 6px rgba(0, 0, 0, .25), 0 12px 28px rgba(0, 0, 0, .22);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--grund);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  min-height: 100vh;
+}
+
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--akzent); }
+
+/* ------------------------------------------------------------- Seitenleiste */
+
+.leiste {
+  background: var(--leiste);
+  color: var(--leiste-text);
+  padding: 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.marke { display: flex; align-items: center; margin-bottom: 1.75rem; }
+
+/* Einklappen: Die Leiste wird zur Symbolspalte, das Kartenraster bekommt rund
+   180 Pixel dazu — genug fuer eine weitere Spalte auf einem 1440er-Schirm.
+   Ganz ausblenden waere kuerzer gedacht: Dann fehlten auch die Zaehler, die
+   den halben Nutzen der Leiste ausmachen. */
+.leiste-schalter {
+  margin-left: auto; flex: none;
+  width: 30px; height: 30px; border-radius: 9px;
+  border: 0; background: var(--leiste-hoch); color: var(--leiste-text);
+  font-size: .95rem; line-height: 1;
+}
+.leiste-schalter:hover { background: #24476f; color: #fff; }
+.marke-zeichen {
+  width: 40px; height: 40px; border-radius: 12px;
+  background: var(--akzent); color: #fff;
+  display: grid; place-items: center;
+  font-weight: 700; font-size: 1.15rem;
+  margin-right: .7rem;
+}
+.marke-text { display: flex; flex-direction: column; line-height: 1.25; }
+.marke-text strong { color: #fff; font-size: 1.02rem; }
+.marke-text small { color: var(--leiste-text); opacity: .65; font-size: .76rem; }
+
+.leiste-nav { display: flex; flex-direction: column; }
+.nav-punkt {
+  display: flex; align-items: center;
+  width: 100%; min-height: 44px;
+  padding: .55rem .75rem; margin-bottom: .2rem;
+  border: 0; border-radius: 11px;
+  background: transparent; color: var(--leiste-text);
+  text-align: left; font-size: .92rem;
+  transition: background .15s, color .15s;
+}
+.nav-punkt:hover { background: var(--leiste-hoch); color: #fff; }
+.nav-punkt.aktiv { background: var(--akzent); color: #fff; font-weight: 600; }
+.nav-icon { margin-right: .6rem; font-size: 1rem; }
+.nav-zahl {
+  margin-left: auto;
+  min-width: 24px; padding: .1rem .45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .16);
+  font-size: .76rem; font-weight: 700; text-align: center;
+}
+.nav-zahl.warnung { background: var(--rot); color: #fff; }
+
+/* --------------------------------------------------------- Einzelansicht */
+
+/* Ein Klick in der Leiste oeffnet die Karte als eigene Seite. Alles andere
+   verschwindet — sonst waere es nur ein Sprung, und man suchte die Karte
+   wieder zwischen acht anderen. Die Adresse bekommt dabei ein #kuerzel,
+   damit der Zurueck-Knopf des Browsers das tut, was man erwartet. */
+body.einzel .kopfzahlen,
+body.einzel .karte-fortschritt,
+body.einzel .karte.aus { display: none; }
+body.einzel .raster { grid-template-columns: 1fr; }
+/* Auf einer eigenen Seite darf die Liste so lang sein, wie sie ist. */
+body.einzel .karte-koerper { max-height: none; }
+/* Sortieren ergibt bei einer einzigen Karte keinen Sinn. */
+body.einzel .griff,
+body.einzel .hoch,
+body.einzel .runter,
+body.einzel .klappen { display: none; }
+body.einzel .karte { box-shadow: var(--schatten); }
+
+.zurueck {
+  display: none;
+  border: 0; background: none; color: var(--akzent);
+  padding: .2rem 0; font-size: .95rem;
+}
+.zurueck:hover { text-decoration: underline; }
+body.einzel .zurueck { display: inline-block; }
+body.einzel .kopf-unter { display: none; }
+
+/* ------------------------------------------------------ Leiste zugeklappt */
+
+body.leiste-zu { grid-template-columns: 72px 1fr; }
+body.leiste-zu .leiste { padding: 1.25rem .6rem; align-items: center; }
+body.leiste-zu .marke { flex-direction: column; margin-bottom: 1.1rem; }
+body.leiste-zu .marke-zeichen { margin: 0 0 .6rem 0; }
+body.leiste-zu .marke-text,
+body.leiste-zu .nav-text,
+body.leiste-zu .hilfe-text { display: none; }
+body.leiste-zu .leiste-schalter { margin: 0; }
+body.leiste-zu .leiste-nav { width: 100%; }
+body.leiste-zu .nav-punkt {
+  position: relative;
+  justify-content: center; padding: .55rem 0;
+}
+body.leiste-zu .nav-icon { margin: 0; font-size: 1.15rem; }
+/* Der Zaehler wandert auf das Symbol — er ist der Grund, warum die
+   eingeklappte Leiste ueberhaupt noch etwas taugt. */
+body.leiste-zu .nav-zahl {
+  position: absolute; top: 2px; right: 6px;
+  min-width: 18px; padding: 0 .28rem;
+  font-size: .68rem; line-height: 18px;
+  background: var(--akzent); color: #fff;
+}
+body.leiste-zu .nav-zahl.warnung { background: var(--rot); }
+body.leiste-zu .hilfe { justify-content: center; padding: .7rem 0; }
+body.leiste-zu .hilfe-icon { margin: 0; }
+body.leiste-zu .leiste-fuss { width: 100%; text-align: center; }
+body.leiste-zu .leiste .still { margin: 0 .25rem; }
+body.leiste-zu #abmelden { display: none; }   /* im Schmalen kein Platz dafuer */
+
+.leiste-fuss { margin-top: auto; padding-top: 1.25rem; }
+.hilfe {
+  display: flex; align-items: center; width: 100%;
+  padding: .8rem; margin-bottom: .6rem;
+  border: 0; border-radius: 14px;
+  background: var(--leiste-hoch); color: var(--leiste-text);
+  text-align: left;
+}
+.hilfe:hover { background: #24476f; }
+.hilfe-icon { font-size: 1.15rem; margin-right: .6rem; }
+.hilfe span { display: flex; flex-direction: column; }
+.hilfe strong { color: #fff; font-size: .88rem; }
+.hilfe small { font-size: .74rem; opacity: .7; }
+
+.leiste .still {
+  border: 0; background: transparent; color: var(--leiste-text);
+  opacity: .7; font-size: .82rem; padding: .4rem .3rem; margin-right: .8rem;
+}
+.leiste .still:hover { opacity: 1; }
+
+/* ------------------------------------------------------------------ Flaeche */
+
+.flaeche { padding: 1.75rem clamp(1rem, 2.5vw, 2.25rem) 3rem; min-width: 0; }
+
+.kopf { display: flex; align-items: flex-start; flex-wrap: wrap; margin-bottom: 1.5rem; }
+/* Schrumpffaehig halten: Ohne `min-width: 0` macht die lange Zeitzeile den
+   Textblock so breit, dass Suchfeld und Datum in die naechste Zeile rutschen —
+   genau das ist am 09.09.2026 passiert, als die Monatssumme dazukam. */
+.kopf-text { margin-right: auto; flex: 1 1 300px; min-width: 0; }
+.kopf h1 { margin: 0; font-size: 1.85rem; font-weight: 700; letter-spacing: -.02em; }
+.kopf-unter { margin: .25rem 0 0; color: var(--text-leise); }
+
+/* Die Zeiterfassung ist eine Nebeninfo, keine Kachel: eine Zeile unter dem
+   Gruss. Mehr wuerde die Seite unuebersichtlich machen — Stundenkonto und
+   Saldo gehoeren nach clockin, nicht hierher. */
+.zeitzeile {
+  margin: .4rem 0 0; color: var(--text-leise); font-size: .86rem;
+}
+.zeitzeile b { color: var(--text); font-weight: 650; }
+.zeitzeile .laeuft { color: var(--gruen); font-weight: 650; }
+body.einzel .zeitzeile { display: none; }
+
+.kopf-werkzeug { display: flex; align-items: center; margin-left: 1rem; }
+.suchfeld {
+  display: flex; align-items: center;
+  background: var(--karte); border: 1px solid var(--rand);
+  border-radius: 12px; padding: .5rem .85rem;
+  box-shadow: var(--schatten);
+  min-width: min(420px, 46vw);
+}
+.suchfeld span { color: var(--text-leise); margin-right: .5rem; }
+.suchfeld input { border: 0; outline: 0; background: transparent; width: 100%; }
+.kopf-person { display: flex; flex-direction: column; align-items: flex-end; margin-left: 1rem; }
+.datum { color: var(--text-leise); font-size: .82rem; }
+.avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--akzent-still); color: var(--akzent);
+  display: grid; place-items: center; font-weight: 700; margin-top: .25rem;
+}
+
+/* ------------------------------------------------------------- Nachrichten */
+
+/* Zurufe der KI stehen ganz oben, noch vor den Zahlen — sie sollen gelesen
+   werden, bevor man in die Karten geht. Deshalb bewusst kraeftiger als eine
+   Karte: getoenter Grund, eigener Rand, groessere Schrift.
+
+   Ohne Nachricht ist der Bereich vollstaendig weg. Eine leere Box, die jeden
+   Tag dasteht, wird nach zwei Tagen nicht mehr wahrgenommen — und dann geht
+   auch die eine wichtige Nachricht unter. */
+.nachrichten { margin-bottom: 1.5rem; }
+
+.nachricht {
+  display: flex; align-items: flex-start;
+  background: var(--akzent-still);
+  border: 1px solid var(--akzent);
+  border-left: 6px solid var(--akzent);
+  border-radius: 16px;
+  padding: 1.15rem 1.35rem;
+  margin-bottom: .75rem;
+  box-shadow: 0 4px 14px rgba(47, 111, 237, .14), 0 18px 36px rgba(20, 45, 90, .10);
+  animation: nachricht-auf .32s ease-out;
+}
+.nachricht.wichtig {
+  background: var(--rot-still);
+  border-color: var(--rot);
+  border-left-color: var(--rot);
+  box-shadow: 0 4px 14px rgba(220, 59, 59, .18), 0 18px 36px rgba(20, 45, 90, .10);
+}
+@keyframes nachricht-auf {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.nachricht-icon {
+  flex: none; margin-right: 1rem;
+  width: 42px; height: 42px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 1.25rem;
+  background: var(--karte); border: 1px solid var(--akzent);
+}
+.nachricht.wichtig .nachricht-icon { border-color: var(--rot); }
+
+.nachricht-mitte { flex: 1; min-width: 0; }
+.nachricht-marke {
+  display: block; margin-bottom: .2rem;
+  font-size: .72rem; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--akzent);
+}
+.nachricht.wichtig .nachricht-marke { color: var(--rot); }
+.nachricht-text {
+  margin: 0; font-size: 1.06rem; line-height: 1.55;
+  font-weight: 500; color: var(--text); white-space: pre-wrap;
+}
+.nachricht-fuss { margin-top: .45rem; color: var(--text-leise); font-size: .8rem; }
+.nachricht-fuss a { margin-left: .5rem; }
+
+.nachricht-knoepfe {
+  flex: none; margin-left: 1.1rem; align-self: center;
+  display: flex; flex-direction: column;
+}
+.nachricht-antworten {
+  border: 0; border-radius: 11px;
+  background: var(--akzent); color: #fff;
+  padding: .6rem 1.1rem; margin-bottom: .45rem;
+  font-size: .88rem; font-weight: 600; white-space: nowrap;
+}
+.nachricht-antworten:hover { filter: brightness(1.08); }
+.nachricht.wichtig .nachricht-antworten { background: var(--rot); }
+
+.nachricht-feld {
+  width: 100%; margin-top: .7rem; padding: .6rem .75rem;
+  border: 1px solid var(--akzent); border-radius: 10px;
+  background: var(--karte); color: var(--text);
+  font: inherit; resize: vertical; min-height: 4.2rem;
+}
+.nachricht-feld:focus { outline: 2px solid var(--akzent); outline-offset: -1px; }
+.nachricht-feld-knoepfe { display: flex; align-items: center; margin-top: .5rem; }
+.nachricht-senden {
+  border: 0; border-radius: 10px; background: var(--akzent); color: #fff;
+  padding: .45rem 1rem; font-size: .86rem; font-weight: 600; margin-right: .6rem;
+}
+.nachricht-senden[disabled] { opacity: .6; }
+.nachricht-abbruch {
+  border: 0; background: none; color: var(--text-leise); font-size: .84rem;
+}
+.nachricht-abbruch:hover { color: var(--text); text-decoration: underline; }
+.nachricht-fehler { margin-top: .4rem; color: var(--rot); font-size: .84rem; }
+
+.nachricht-erledigt {
+  flex: none; align-self: stretch;
+  border: 1px solid var(--akzent); border-radius: 11px;
+  background: var(--karte); color: var(--akzent);
+  padding: .6rem 1.1rem; font-size: .88rem; font-weight: 600; white-space: nowrap;
+}
+.nachricht-erledigt:hover { background: var(--akzent); color: #fff; }
+.nachricht.wichtig .nachricht-erledigt { border-color: var(--rot); color: var(--rot); }
+.nachricht.wichtig .nachricht-erledigt:hover { background: var(--rot); color: #fff; }
+
+body.einzel .nachrichten, body.zugaenge .nachrichten { display: none; }
+
+@media (max-width: 900px) {
+  .nachricht { flex-wrap: wrap; padding: 1rem; }
+  .nachricht-text { font-size: 1rem; }
+  .nachricht-knoepfe { flex-direction: row; margin: .8rem 0 0 auto; }
+  .nachricht-antworten { margin: 0 .5rem 0 0; }
+}
+
+/* -------------------------------------------------------------- Kopfzahlen */
+
+.kopfzahlen {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-gap: 1rem; margin-bottom: 1.25rem;
+}
+.kopfzahl {
+  display: flex; align-items: center;
+  background: var(--karte); border: 1px solid var(--rand);
+  border-radius: 16px; padding: 1rem 1.1rem;
+  box-shadow: var(--schatten);
+  text-align: left; width: 100%;
+  transition: transform .12s, box-shadow .12s;
+}
+.kopfzahl:hover { transform: translateY(-2px); }
+.kopfzahl-icon {
+  width: 46px; height: 46px; border-radius: 13px;
+  display: grid; place-items: center; font-size: 1.25rem;
+  background: var(--akzent-still); margin-right: .85rem; flex: none;
+}
+.kopfzahl-text { display: flex; flex-direction: column; min-width: 0; }
+.kopfzahl-titel { color: var(--text-leise); font-size: .86rem; }
+.kopfzahl-zahl { font-size: 1.9rem; font-weight: 700; line-height: 1.1; }
+.kopfzahl-warnung { color: var(--rot); font-size: .82rem; font-weight: 600; }
+.kopfzahl-warnung.ruhig { color: var(--gruen); font-weight: 500; }
+
+/* ------------------------------------------------------------------ Karten */
+
+.raster {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-gap: 1rem; align-items: start;
+}
+.karte {
+  background: var(--karte); border: 1px solid var(--rand);
+  border-radius: 16px; box-shadow: var(--schatten);
+  overflow: hidden;
+}
+.karte.zieht { opacity: .45; }
+.karte.ziel { outline: 2px dashed var(--akzent); outline-offset: -4px; }
+.karte.zu .karte-koerper, .karte.zu .kennzahlen, .karte.zu .karte-fuss { display: none; }
+
+.karte-kopf { display: flex; align-items: center; padding: .9rem 1rem .55rem; }
+.karte-kopf h2 { margin: 0; font-size: 1.02rem; font-weight: 650; }
+.karte-icon {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: var(--akzent-still);
+  display: grid; place-items: center; margin-right: .6rem; flex: none;
+}
+.griff {
+  border: 0; background: transparent; color: var(--text-leise);
+  padding: .2rem .35rem .2rem 0; cursor: grab; font-size: .95rem;
+}
+.badge {
+  margin-left: .5rem; min-width: 24px; padding: .1rem .45rem;
+  border-radius: 999px; background: var(--akzent); color: #fff;
+  font-size: .74rem; font-weight: 700; text-align: center;
+}
+.punkt { width: 9px; height: 9px; border-radius: 50%; background: var(--rand); margin-left: .5rem; flex: none; }
+.punkt.rot { background: var(--rot); box-shadow: 0 0 0 4px var(--rot-still); }
+.punkt.gelb { background: var(--gelb); box-shadow: 0 0 0 4px var(--gelb-still); }
+.punkt.blau { background: var(--blau); box-shadow: 0 0 0 4px var(--blau-still); }
+.punkt.gruen { background: var(--gruen); box-shadow: 0 0 0 4px var(--gruen-still); }
+
+.karte-knoepfe { margin-left: auto; display: flex; align-items: center; }
+.karte-knoepfe .still {
+  border: 0; background: transparent; color: var(--text-leise);
+  width: 30px; height: 30px; border-radius: 8px; font-size: .95rem; line-height: 1;
+}
+.karte-knoepfe .still:hover { background: var(--karte-still); color: var(--text); }
+.karte.zu .klappen { transform: rotate(-90deg); }
+
+.kennzahlen { display: flex; flex-wrap: wrap; padding: 0 1rem .6rem; }
+.kennzahl {
+  background: var(--karte-still); border-radius: 9px;
+  padding: .3rem .6rem; margin: 0 .4rem .4rem 0; font-size: .8rem;
+}
+.kennzahl b { font-weight: 700; }
+.kennzahl-name { color: var(--text-leise); margin-right: .3rem; }
+
+.karte-koerper { padding: 0 .5rem; max-height: 22rem; overflow-y: auto; }
+.posten { list-style: none; margin: 0; padding: 0; }
+
+.posten li.zeile {
+  display: flex; align-items: flex-start;
+  padding: .5rem .5rem; border-radius: 10px;
+}
+.posten li.zeile:hover { background: var(--karte-still); }
+.posten li.zeile.ist-erledigt { opacity: .5; }
+.posten li.zeile.ist-erledigt .zeile-titel { text-decoration: line-through; }
+
+.haken {
+  width: 26px; height: 26px; flex: none; margin: 1px .6rem 0 0;
+  border: 2px solid var(--rand); border-radius: 8px;
+  background: transparent; color: transparent;
+  display: grid; place-items: center; font-size: .85rem; line-height: 1;
+}
+.haken:hover { border-color: var(--akzent); }
+.haken.an { background: var(--akzent); border-color: var(--akzent); color: #fff; }
+
+/* Zeilen ohne Haken (Kalender): der Platz des Kaestchens faellt weg, damit
+   keine Luecke stehen bleibt, die nach einem fehlenden Bedienelement aussieht. */
+.posten li.zeile.ohne-haken { padding-left: .65rem; }
+
+.zeile-mitte { min-width: 0; flex: 1; }
+.zeile-titel { font-weight: 600; }
+.zeile-text { color: var(--text-leise); font-size: .84rem; overflow-wrap: anywhere; }
+.zeile-notiz {
+  margin-top: .3rem; padding: .35rem .55rem;
+  background: var(--gelb-still); border-radius: 8px;
+  font-size: .82rem; color: var(--text);
+}
+.zeile-notiz-feld {
+  width: 100%; margin-top: .35rem; padding: .45rem .6rem;
+  border: 1px solid var(--rand); border-radius: 9px;
+  background: var(--karte); resize: vertical; min-height: 2.6rem;
+}
+
+.zeile-rechts { display: flex; flex-direction: column; align-items: flex-end; margin-left: .5rem; flex: none; }
+.zeile-betrag { font-weight: 650; font-variant-numeric: tabular-nums; }
+.zeile-datum { color: var(--text-leise); font-size: .78rem; }
+.pille {
+  display: inline-block; margin-top: .2rem;
+  padding: .12rem .5rem; border-radius: 999px;
+  font-size: .74rem; font-weight: 600; white-space: nowrap;
+}
+.pille.rot { background: var(--rot-still); color: var(--rot); }
+.pille.gelb { background: var(--gelb-still); color: var(--gelb); }
+.pille.blau { background: var(--blau-still); color: var(--blau); }
+.pille.gruen { background: var(--gruen-still); color: var(--gruen); }
+
+.zeile-link {
+  margin-top: .25rem; font-size: .76rem; text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.zeile-link:hover { border-bottom-color: currentColor; }
+
+.leer { padding: 1.2rem .8rem; color: var(--text-leise); text-align: center; }
+.leer strong { display: block; color: var(--gruen); font-size: 1rem; }
+
+.karte-hinweis, .karte-fehler {
+  margin: .3rem .5rem .6rem; padding: .5rem .7rem;
+  border-radius: 9px; font-size: .82rem;
+}
+.karte-hinweis { background: var(--karte-still); color: var(--text-leise); }
+.karte-fehler { background: var(--rot-still); color: var(--rot); }
+
+.karte-fuss {
+  display: flex; align-items: center;
+  padding: .55rem 1rem .8rem; border-top: 1px solid var(--rand);
+  margin-top: .4rem;
+}
+.karte-fuss .still {
+  border: 0; background: transparent; color: var(--akzent);
+  font-size: .8rem; padding: .3rem 0; margin-right: auto;
+}
+.karte-stand {
+  color: var(--text-leise); font-size: .76rem; margin-left: auto;
+  background: none; border: 0; padding: .2rem .1rem; cursor: pointer;
+}
+.karte-stand:hover { color: var(--text); text-decoration: underline; }
+
+/* Auffrischen: das Symbol dreht sich, solange wirklich etwas laeuft — und es
+   hoert erst auf, wenn ein neuer Stand da ist. Ein Zappeln von genau zwei
+   Sekunden waere eine Behauptung, keine Rueckmeldung. */
+.karte.laedt .auffrischen { animation: dreht 1.1s linear infinite; color: var(--akzent); }
+.karte.laedt .karte-stand { color: var(--akzent); }
+.karte-knoepfe .still[disabled] { opacity: .55; cursor: default; }
+@keyframes dreht { to { transform: rotate(360deg); } }
+.karte-link { font-size: .78rem; margin-left: .8rem; text-decoration: none; }
+
+/* ------------------------------------------------------------ Fortschritt */
+
+.karte-fortschritt .karte-koerper { max-height: none; padding: .25rem 1rem 1.1rem; }
+.fortschritt { display: grid; grid-template-columns: auto 1fr; grid-gap: 1rem; align-items: center; }
+.ring { position: relative; width: 132px; height: 132px; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 11; stroke-linecap: round; }
+.ring-spur { stroke: var(--karte-still); }
+.ring-wert {
+  stroke: var(--gruen);
+  stroke-dasharray: 327; stroke-dashoffset: 327;
+  transition: stroke-dashoffset .6s ease;
+}
+.ring-mitte {
+  position: absolute; inset: 0;
+  display: grid; place-content: center; text-align: center;
+}
+.ring-mitte strong { font-size: 1.25rem; }
+.ring-mitte small { color: var(--text-leise); font-size: .76rem; }
+.fortschritt-liste { list-style: none; margin: 0; padding: 0; font-size: .88rem; }
+.fortschritt-liste li { display: flex; align-items: center; margin-bottom: .35rem; }
+.fortschritt-liste .punkt { margin: 0 .5rem 0 0; }
+.fortschritt-liste span { font-weight: 700; margin-right: .3rem; }
+.fortschritt-satz {
+  grid-column: 1 / -1; margin: .4rem 0 0;
+  padding: .7rem .85rem; border-radius: 12px;
+  background: var(--akzent-still); color: var(--text); font-size: .86rem;
+}
+
+/* ------------------------------------------------------------- Zugaenge */
+
+.einstellungen { max-width: 760px; }
+.einstellungen-vorwort {
+  background: var(--karte); border: 1px solid var(--rand);
+  border-radius: 14px; padding: .9rem 1.1rem; margin: 0 0 1rem;
+  color: var(--text-leise); font-size: .88rem; line-height: 1.6;
+}
+.einstellungen-vorwort code {
+  background: var(--karte-still); padding: .05rem .3rem; border-radius: 5px;
+}
+/* Kategorien statt einer langen Rolle: Mit fünfzehn Feldern in acht Gruppen
+   plus Postfächern und KI-Zugang scrollt man sonst an allem vorbei, was man
+   gerade nicht sucht. */
+.e-reiter { display: flex; flex-wrap: wrap; margin-bottom: 1rem; }
+.e-reiter button {
+  border: 1px solid var(--rand); background: var(--karte);
+  color: var(--text-leise); border-radius: 999px;
+  padding: .45rem .9rem; margin: 0 .45rem .45rem 0;
+  font-size: .86rem; white-space: nowrap;
+}
+.e-reiter button:hover { border-color: var(--akzent); color: var(--akzent); }
+.e-reiter button.aktiv {
+  background: var(--akzent); border-color: var(--akzent); color: #fff; font-weight: 600;
+}
+.e-reiter .e-reiter-zahl {
+  margin-left: .4rem; opacity: .75; font-size: .78rem;
+}
+.e-gruppe.aus { display: none; }
+
+.e-gruppe {
+  background: var(--karte); border: 1px solid var(--rand);
+  border-radius: 16px; padding: 1rem 1.1rem; margin-bottom: .9rem;
+  box-shadow: var(--schatten);
+}
+.e-gruppe-kopf { display: flex; align-items: center; margin-bottom: .7rem; }
+.e-gruppe-kopf h3 { margin: 0; font-size: 1rem; }
+.e-pruefen {
+  margin-left: auto; border: 1px solid var(--rand); background: var(--karte-still);
+  color: var(--text); border-radius: 9px; padding: .35rem .7rem; font-size: .82rem;
+}
+.e-pruefen:hover { border-color: var(--akzent); color: var(--akzent); }
+.e-ergebnis { margin-left: .6rem; font-size: .82rem; }
+.e-ergebnis.gut { color: var(--gruen); }
+.e-ergebnis.schlecht { color: var(--rot); }
+
+.e-feld { margin-bottom: .8rem; }
+.e-feld label { display: block; font-size: .86rem; font-weight: 600; margin-bottom: .2rem; }
+.e-feld select {
+  width: 100%; padding: .5rem .7rem;
+  border: 1px solid var(--rand); border-radius: 9px;
+  background: var(--karte-still); color: var(--text);
+}
+.e-feld input {
+  width: 100%; padding: .5rem .7rem;
+  border: 1px solid var(--rand); border-radius: 9px;
+  background: var(--karte-still); color: var(--text);
+}
+.e-feld input:focus { outline: 2px solid var(--akzent); outline-offset: -1px; }
+.e-hilfe { color: var(--text-leise); font-size: .78rem; margin-top: .2rem; }
+.e-stand { font-size: .78rem; margin-top: .2rem; }
+.e-stand.fehlt { color: var(--rot); }
+.e-entfernen {
+  border: 0; background: none; color: var(--rot);
+  font-size: .78rem; margin-left: .6rem; padding: 0;
+  text-decoration: underline;
+}
+.e-entfernen:hover { filter: brightness(1.15); }
+.e-entfernen[disabled] { opacity: .5; }
+.e-stand.da { color: var(--text-leise); }
+
+.postfach {
+  border: 1px solid var(--rand); border-radius: 12px;
+  padding: .8rem .9rem; margin-bottom: .7rem; background: var(--karte-still);
+}
+.postfach-kopf { display: flex; align-items: center; margin-bottom: .6rem; }
+.postfach-kopf strong { font-size: .92rem; }
+.postfach-kopf .e-pruefen { margin-left: auto; }
+.postfach-kopf .postfach-weg { margin-left: .4rem; }
+.postfach-felder { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); grid-gap: .6rem; }
+.postfach-felder .e-feld { margin-bottom: 0; }
+.postfach-fuss { display: flex; align-items: center; margin-top: .7rem; }
+.postfach-fuss .e-ergebnis { margin-left: .6rem; }
+.postfach-loeschen { border: 0; background: none; color: var(--rot); font-size: .82rem; margin-left: auto; }
+.postfach-loeschen:hover { text-decoration: underline; }
+.postfach-aktiv { display: flex; align-items: center; font-size: .84rem; color: var(--text-leise); }
+.postfach-aktiv input { width: auto; margin-right: .4rem; }
+
+.webhook-stand { margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--rand); }
+.webhook-warnung { color: var(--rot); }
+.webhook-hinweis {
+  margin: .5rem 0 .7rem; padding: .6rem .75rem;
+  background: var(--rot-still); border-radius: 9px;
+  color: var(--text); font-size: .84rem; line-height: 1.55;
+}
+
+.webhook-knoepfe { display: flex; align-items: center; flex-wrap: wrap; }
+
+.mcp-text { margin: 0 0 .6rem; font-size: .88rem; color: var(--text-leise); line-height: 1.6; }
+.mcp-adresse {
+  background: var(--karte-still); border: 1px solid var(--rand);
+  border-radius: 9px; padding: .55rem .7rem; margin-bottom: .7rem;
+  overflow-x: auto;                 /* lange Adresse scrollt, statt zu sprengen */
+}
+.mcp-adresse code { font-size: .82rem; white-space: nowrap; }
+.mcp-knoepfe { display: flex; align-items: center; flex-wrap: wrap; }
+.mcp-knoepfe .knopf-haupt { padding: .45rem 1rem; font-size: .88rem; margin-right: .5rem; }
+.mcp-warnung {
+  margin: .8rem 0 0; padding: .6rem .75rem;
+  background: var(--rot-still); border-radius: 9px;
+  color: var(--text); font-size: .82rem; line-height: 1.55;
+}
+.mcp-warnung code { background: rgba(0,0,0,.06); padding: .05rem .28rem; border-radius: 4px; }
+.mcp-details { margin-top: .8rem; }
+.mcp-details summary { cursor: pointer; font-size: .88rem; color: var(--akzent); }
+.mcp-details[open] summary { margin-bottom: .7rem; }
+.mcp-liste { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .84rem; color: var(--text-leise); }
+.mcp-liste li { margin-bottom: .35rem; }
+.mcp-liste b { color: var(--text); }
+
+.einstellungen-fuss { display: flex; align-items: center; margin-top: 1rem; }
+.knopf-haupt {
+  border: 0; border-radius: 11px; background: var(--akzent); color: #fff;
+  padding: .6rem 1.4rem; font-size: .95rem; font-weight: 600;
+}
+.knopf-haupt:hover { filter: brightness(1.08); }
+.knopf-haupt[disabled] { opacity: .6; }
+.einstellungen-meldung { margin-left: .8rem; font-size: .86rem; color: var(--gruen); }
+.einstellungen-meldung.schlecht { color: var(--rot); }
+
+body.zugaenge .kopfzahlen,
+body.zugaenge .raster,
+body.zugaenge .zeitzeile,
+body.zugaenge .kopf-unter,
+body.zugaenge .suchfeld,
+body.zugaenge .fuss { display: none; }
+body.zugaenge .einstellungen { display: block; }
+/* Der Settings-Punkt sitzt unten in der Leiste, abgesetzt von den Karten:
+   Er gehoert nicht zur Tagesarbeit, sondern daneben. */
+.nav-verwaltung {
+  margin-bottom: .6rem;
+  border-top: 1px solid rgba(255, 255, 255, .10);
+  border-radius: 0 0 11px 11px; padding-top: .7rem;
+}
+body.leiste-zu .nav-verwaltung { padding-top: .55rem; }
+
+.fuss { margin: 2rem 0 0; color: var(--text-leise); font-size: .82rem; max-width: 60ch; }
+
+/* ---------------------------------------------------------------- Skelett */
+
+.skelett, .skelett-zeile {
+  position: relative; overflow: hidden;
+  background: var(--karte-still);
+}
+.kopfzahl.skelett { height: 82px; border-radius: 16px; }
+.skelett-zeile { height: 34px; border-radius: 9px; margin: .45rem .5rem; list-style: none; }
+.skelett::after, .skelett-zeile::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent);
+  animation: schimmer 1.4s infinite;
+}
+:root[data-theme="dark"] .skelett::after,
+:root[data-theme="dark"] .skelett-zeile::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .07), transparent);
+}
+@keyframes schimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .001s !important; transition-duration: .001s !important; }
+}
+
+/* ------------------------------------------------------------------ Schmal */
+
+@media (max-width: 900px) {
+  body { grid-template-columns: 1fr; }
+  .leiste {
+    position: static; height: auto; flex-direction: row; flex-wrap: wrap;
+    align-items: center; padding: .8rem 1rem;
+  }
+  .marke { margin: 0 auto 0 0; }
+  .leiste-nav { display: none; }
+  .leiste-schalter { display: none; }
+  body.leiste-zu { grid-template-columns: 1fr; }
+  body.leiste-zu .leiste { flex-direction: row; padding: .8rem 1rem; }
+  body.leiste-zu .marke { flex-direction: row; margin: 0 auto 0 0; }
+  body.leiste-zu .marke-zeichen { margin: 0 .7rem 0 0; }
+  body.leiste-zu .marke-text { display: flex; }
+  body.leiste-zu .hilfe-text { display: flex; }
+  body.leiste-zu #abmelden { display: inline; }
+  .leiste-fuss { margin: 0; padding: 0; display: flex; align-items: center; }
+  .hilfe { margin: 0 .5rem 0 0; padding: .5rem .7rem; }
+  .hilfe small { display: none; }
+  .flaeche { padding: 1.1rem 1rem 3rem; }
+  .kopf h1 { font-size: 1.45rem; }
+  .kopf-werkzeug { width: 100%; margin: .8rem 0 0; }
+  .suchfeld { min-width: 0; flex: 1; }
+  .raster { grid-template-columns: 1fr; }
+  .griff { display: none; }         /* auf dem Telefon zaehlen die Pfeile */
+}
+
+/* Hinweis auf eine veraltete Seite.
+
+   Ganz oben und über allem, weil er genau dann gebraucht wird, wenn der Rest
+   der Seite scheinbar normal aussieht und trotzdem nicht mehr tut, was er
+   soll. Kein Flex-`gap` — iOS 12 kennt es nicht. */
+.fassung-hinweis {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: .55rem .9rem;
+  background: var(--gelb-still);
+  color: var(--gelb);
+  border-bottom: 1px solid var(--gelb);
+  font-size: .88rem;
+  font-weight: 600;
+  text-align: center;
+}
+.fassung-hinweis button {
+  margin-left: .7rem;
+  padding: .3rem .8rem;
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--gelb);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.fassung-hinweis button:hover { filter: brightness(1.08); }
+@media (max-width: 700px) {
+  .fassung-hinweis { display: block; }
+  .fassung-hinweis button { margin: .5rem 0 0; width: 100%; }
+}
+
+/* Erklaerzeile unter dem Ring: was die Quellen von selbst erkannt haben. */
+.fortschritt-erkannt {
+  margin: .2rem 0 0;
+  font-size: .8rem;
+  color: var(--text-leise);
+}
+
+/* Werkzeug-Karte: fragt statt zu holen (heute die FAQ). Sie hat keinen
+   Ladezustand und keine Liste, die überlaufen könnte — deshalb keine
+   Höhenbegrenzung wie bei den Posten-Karten. */
+.karte-werkzeug .karte-koerper { max-height: none; }
+.faq-feld { display: block; margin-bottom: .6rem; }
+.faq-feld span { display: block; font-size: .86rem; font-weight: 600; margin-bottom: .2rem; }
+.faq-feld textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: .5rem .6rem;
+  border: 1px solid var(--rand);
+  border-radius: 10px;
+  background: var(--karte-still);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+.faq-feld textarea:focus { outline: 2px solid var(--akzent); outline-offset: -1px; }
+.faq-knoepfe { display: flex; align-items: center; margin-bottom: .6rem; }
+.faq-knoepfe .e-ergebnis { margin-left: .6rem; }
+.faq-antwort {
+  padding: .7rem .8rem;
+  border: 1px solid var(--rand);
+  border-radius: 12px;
+  background: var(--karte-still);
+  margin-bottom: .6rem;
+}
+.faq-kopf { display: flex; align-items: center; margin-bottom: .4rem; }
+.faq-kurz { margin: 0 0 .4rem; font-weight: 600; }
+.faq-lang { margin: 0 0 .4rem; font-size: .9rem; color: var(--text-leise); }
+.faq-warnung {
+  margin: .4rem 0 0;
+  padding: .45rem .6rem;
+  border-radius: 8px;
+  background: var(--gelb-still);
+  color: var(--gelb);
+  font-size: .86rem;
+  font-weight: 600;
+}
+.faq-mehr { margin: .5rem 0 0; font-size: .84rem; color: var(--text-leise); }
+.faq-weiter { margin-left: .3rem; color: var(--akzent); text-decoration: underline; }
+.faq-verlauf { margin-top: .2rem; }
+.faq-quelle {
+  margin: 0 0 .4rem;
+  font-size: .84rem;
+  font-weight: 600;
+  color: var(--text-leise);
+}
+.faq-merke { margin: 0 0 .6rem; font-size: .8rem; color: var(--text-leise); }
+
+/* Zeile unter dem Raster: Karten, für die noch kein Zugang hinterlegt ist. */
+.karten-fehlend {
+  margin: 0 0 1.4rem;
+  font-size: .85rem;
+  color: var(--text-leise);
+}
+.karten-fehlend a { color: var(--akzent); }
+
+/* Superchat-Postfachwahl: gewählte Postfächer als Chips, darunter das Menü.
+   Kein Flex-`gap` — iOS 12 kennt es nur im Grid; hier zählt margin. */
+.pfwahl { margin-top: .4rem; }
+.pfwahl-liste { margin-bottom: .5rem; }
+.pfwahl-leer { font-size: .82rem; color: var(--text-leise); }
+.pfwahl-chip {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 .4rem .4rem 0;
+  padding: .3rem .3rem .3rem .7rem;
+  border: 1px solid var(--rand);
+  border-radius: 999px;
+  background: var(--karte-still);
+  font-size: .84rem;
+}
+.pfwahl-chip strong { font-weight: 600; }
+.pfwahl-chip small {
+  margin-left: .45rem;
+  color: var(--text-leise);
+  font-size: .75rem;
+}
+.pfwahl-weg {
+  margin-left: .35rem;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-leise);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.pfwahl-weg:hover { background: var(--rot-still); color: var(--rot); }
+.pfwahl-zeile { display: flex; align-items: center; flex-wrap: wrap; }
+.pfwahl-menue {
+  min-height: 44px;
+  margin-right: .5rem;
+  padding: .4rem .6rem;
+  border: 1px solid var(--rand);
+  border-radius: 10px;
+  background: var(--karte);
+  color: var(--text);
+  font: inherit;
+  max-width: 100%;
+}
+.pfwahl-menue:disabled { color: var(--text-leise); }
+
+/* ------------------------------------------------ Farbe je Postfach
+
+   Nur wenn mehrere Postfaecher ueberwacht werden. Farbe heisst auf diesem
+   Dashboard sonst ueberall Dringlichkeit — rot brennt, gelb heute, blau zur
+   Kenntnis. Damit die Postfachfarbe nicht als zweite Warnsprache gelesen
+   wird, bekommt sie bewusst eine andere FORM: einen schmalen Streifen an der
+   linken Kante der Zeile, nicht eine Pille rechts. Dieselbe Farbe traegt die
+   Kennzahl am Kartenkopf, die den Postfachnamen nennt — die ist damit
+   zugleich die Legende.
+
+   Die Hues liegen bewusst neben den Ampelfarben (#dc3b3b, #b5820b, #1f9d61,
+   #2f6fed): Violett, Tuerkis, Magenta, Bernstein, Indigo, Oliv. */
+:root {
+  --fach-1: #7b5cd6;  --fach-1-hauch: rgba(123, 92, 214, .07);  --fach-1-stark: rgba(123, 92, 214, .14);
+  --fach-2: #0f9b8e;  --fach-2-hauch: rgba(15, 155, 142, .08);  --fach-2-stark: rgba(15, 155, 142, .15);
+  --fach-3: #c9457f;  --fach-3-hauch: rgba(201, 69, 127, .07);  --fach-3-stark: rgba(201, 69, 127, .14);
+  --fach-4: #a86a2c;  --fach-4-hauch: rgba(168, 106, 44, .08);  --fach-4-stark: rgba(168, 106, 44, .15);
+  --fach-5: #4a4fb5;  --fach-5-hauch: rgba(74, 79, 181, .07);   --fach-5-stark: rgba(74, 79, 181, .14);
+  --fach-6: #6d8f2f;  --fach-6-hauch: rgba(109, 143, 47, .08);  --fach-6-stark: rgba(109, 143, 47, .15);
+}
+:root[data-theme="dark"] {
+  /* Auf dunklem Grund brauchen dieselben Hues mehr Helligkeit, sonst
+     verschwinden sie im Hintergrund statt zu unterscheiden — und der Hauch
+     hinter der Zeile etwas mehr Deckung. */
+  --fach-1: #a68cff;  --fach-1-hauch: rgba(166, 140, 255, .10);  --fach-1-stark: rgba(166, 140, 255, .18);
+  --fach-2: #35c9ba;  --fach-2-hauch: rgba(53, 201, 186, .10);   --fach-2-stark: rgba(53, 201, 186, .18);
+  --fach-3: #f07ab0;  --fach-3-hauch: rgba(240, 122, 176, .10);  --fach-3-stark: rgba(240, 122, 176, .18);
+  --fach-4: #d9a05a;  --fach-4-hauch: rgba(217, 160, 90, .10);   --fach-4-stark: rgba(217, 160, 90, .18);
+  --fach-5: #8790e8;  --fach-5-hauch: rgba(135, 144, 232, .10);  --fach-5-stark: rgba(135, 144, 232, .18);
+  --fach-6: #a3c95c;  --fach-6-hauch: rgba(163, 201, 92, .10);   --fach-6-stark: rgba(163, 201, 92, .18);
+}
+
+.posten li.zeile.fach {
+  border-left: 3px solid var(--fach-farbe);
+  padding-left: .55rem;
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+.posten li.zeile.ohne-haken.fach { padding-left: .7rem; }
+
+/* Die Unterzeile nennt das Postfach — sie traegt dessen Farbe, damit die
+   Zugehoerigkeit in der Zeile selbst steht und nicht nur an ihrem Rand.
+   Bewusst nur diese Zeile: Der Titel ist der Kontakt und bleibt neutral,
+   sonst faerbt sich der halbe Bildschirm ein und die Farbe sagt nichts mehr. */
+.posten li.zeile.fach .zeile-text { color: var(--fach-farbe); }
+
+/* Ein zarter Hauch derselben Farbe hinter der ganzen Zeile. So gruppieren
+   sich benachbarte Zeilen desselben Postfachs sichtbar, ohne dass es nach
+   einer Statusmarkierung aussieht — dafuer ist es viel zu blass.
+
+   Ausgeschriebene rgba-Werte statt `color-mix`: Das kennt Safari erst ab 16,
+   und auf dem iPhone 6 im Team waere die Zeile sonst einfach ungetoent. */
+.posten li.zeile.fach { background: var(--fach-hauch); }
+.posten li.zeile.fach:hover { background: var(--fach-hauch-stark); }
+
+/* Die Kennzahl mit dem Postfachnamen: getoenter Rand statt Fuellung — eine
+   volle Farbflaeche saehe aus wie eine Statuspille. */
+.kennzahl.fach {
+  border: 1px solid var(--fach-farbe);
+  background: transparent;
+}
+.kennzahl.fach .kennzahl-name { color: var(--fach-farbe); font-weight: 600; }
+
+/* Farben mit Namen, für ausdrückliche Wünsche in SUPERCHAT_FARBEN.
+
+   „rot“ ist bewusst ein Karmin und nicht die Ampelfarbe #dc3b3b: Wer ein
+   Postfach rot faerbt, weil es Vorrang hat, soll es rot sehen — aber ein
+   Postfach ist keine Frist. Der Unterschied im Ton bleibt sichtbar, wenn
+   eine rote Dringlichkeitspille daneben steht. */
+:root {
+  --fach-rot: #d14356;       --fach-rot-hauch: rgba(209, 67, 86, .09);    --fach-rot-stark: rgba(209, 67, 86, .17);
+  --fach-orange: #c56a1a;    --fach-orange-hauch: rgba(197, 106, 26, .09);--fach-orange-stark: rgba(197, 106, 26, .17);
+}
+:root[data-theme="dark"] {
+  --fach-rot: #ff7d8d;       --fach-rot-hauch: rgba(255, 125, 141, .12);  --fach-rot-stark: rgba(255, 125, 141, .20);
+  --fach-orange: #e79a4d;    --fach-orange-hauch: rgba(231, 154, 77, .11);--fach-orange-stark: rgba(231, 154, 77, .19);
+}
+
+.fach-rot      { --fach-farbe: var(--fach-rot);     --fach-hauch: var(--fach-rot-hauch);     --fach-hauch-stark: var(--fach-rot-stark); }
+.fach-orange   { --fach-farbe: var(--fach-orange);  --fach-hauch: var(--fach-orange-hauch);  --fach-hauch-stark: var(--fach-orange-stark); }
+.fach-violett  { --fach-farbe: var(--fach-1); --fach-hauch: var(--fach-1-hauch); --fach-hauch-stark: var(--fach-1-stark); }
+.fach-tuerkis  { --fach-farbe: var(--fach-2); --fach-hauch: var(--fach-2-hauch); --fach-hauch-stark: var(--fach-2-stark); }
+.fach-magenta  { --fach-farbe: var(--fach-3); --fach-hauch: var(--fach-3-hauch); --fach-hauch-stark: var(--fach-3-stark); }
+.fach-bernstein{ --fach-farbe: var(--fach-4); --fach-hauch: var(--fach-4-hauch); --fach-hauch-stark: var(--fach-4-stark); }
+.fach-indigo   { --fach-farbe: var(--fach-5); --fach-hauch: var(--fach-5-hauch); --fach-hauch-stark: var(--fach-5-stark); }
+.fach-oliv     { --fach-farbe: var(--fach-6); --fach-hauch: var(--fach-6-hauch); --fach-hauch-stark: var(--fach-6-stark); }
+
+.fach-1 { --fach-farbe: var(--fach-1); --fach-hauch: var(--fach-1-hauch); --fach-hauch-stark: var(--fach-1-stark); }
+.fach-2 { --fach-farbe: var(--fach-2); --fach-hauch: var(--fach-2-hauch); --fach-hauch-stark: var(--fach-2-stark); }
+.fach-3 { --fach-farbe: var(--fach-3); --fach-hauch: var(--fach-3-hauch); --fach-hauch-stark: var(--fach-3-stark); }
+.fach-4 { --fach-farbe: var(--fach-4); --fach-hauch: var(--fach-4-hauch); --fach-hauch-stark: var(--fach-4-stark); }
+.fach-5 { --fach-farbe: var(--fach-5); --fach-hauch: var(--fach-5-hauch); --fach-hauch-stark: var(--fach-5-stark); }
+.fach-6 { --fach-farbe: var(--fach-6); --fach-hauch: var(--fach-6-hauch); --fach-hauch-stark: var(--fach-6-stark); }
+
+/* Update-Bereich in den Einstellungen. */
+.update-zeile { margin: 0 0 .6rem; font-size: .88rem; }
+.update-zeile code {
+  padding: .1rem .35rem; border-radius: 6px;
+  background: var(--karte-still); font-size: .85em;
+}
+#update-stand .e-ergebnis { display: block; margin: 0 0 .7rem; }
+#update-stand .e-ergebnis small { color: var(--text-leise); font-weight: 400; }
+
+/* Punkt am Settings-Eintrag: eine neue Fassung liegt bereit. */
+.nav-neu {
+  width: 8px; height: 8px; margin-left: auto; flex: none;
+  border-radius: 50%; background: var(--akzent);
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, .18);
+}
+:root[data-theme="dark"] .nav-neu { box-shadow: 0 0 0 3px rgba(120, 160, 255, .22); }
+body.leiste-zu .nav-neu { margin-left: 0; position: absolute; top: 8px; right: 8px; }
+
+/* Wartung: steht unter den Einstellungen, nicht zwischen ihnen.
+   Ein Update ist kein Zugang, den man einträgt, sondern eine Handlung am
+   Server — dafür eine eigene Überschrift und eine sichtbare Trennlinie. */
+.wartung-titel {
+  margin: 2.2rem 0 .8rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--rand);
+  font-size: .82rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-leise);
+}
+.e-gruppe.wartung { border-style: dashed; }
+
+/* Kurzfassung der Änderungen im Update-Kasten. */
+.update-aenderungen { margin: 0 0 .9rem; font-size: .85rem; }
+.update-aenderungen ul { margin: .35rem 0 0; padding-left: 1.2rem; }
+.update-aenderungen li { margin-bottom: .25rem; color: var(--text-leise); }

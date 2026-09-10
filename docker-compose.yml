@@ -1,0 +1,80 @@
+# Eine Datei fuer alle Instanzen. Was sich unterscheidet, steht in der .env
+# des jeweiligen Ordners: INSTANZ (Router- und Container-Namen), HOST_REGEL
+# (welche Adresse), PERSON_NAME/TITEL/KARTEN (was die Seite zeigt).
+#
+# HOST_REGEL ist Pflicht — eine Vorgabe waere die Adresse einer fremden
+# Installation und wuerde deren Zertifikat mit anfragen.
+services:
+  dashboard:
+    container_name: smg-${INSTANZ:-dashboard}
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      BUCHHALTUNG_DB: /data/${INSTANZ:-dashboard}.sqlite3
+      # Ohne das laeuft der Container in UTC. "heute faellig", der
+      # Kalender-Gate und die Uhrzeiten im Kopf stuenden dann zwei Stunden
+      # neben dem, was am Arbeitsplatz gilt.
+      TZ: Europe/Berlin
+      GOOGLE_KEY: /daten/google/google-key.json
+      BANK_ORDNER: /daten/bank
+      WIDERRUF_ORDNER: /daten/widerruf
+      WATCHDOG_ORDNER: /daten/watchdog
+    volumes:
+      - ./data:/data
+      # Zulieferungen von aussen — alle vier OPTIONAL.
+      #
+      # Ohne Angabe zeigen sie auf den mitgelieferten leeren Ordner. Auf einer
+      # frischen Maschine gibt es diese Pfade naemlich nicht, und Docker legt
+      # fuer einen fehlenden Bind-Mount stillschweigend ein Verzeichnis an —
+      # beim Google-Schluessel entstuende so ein VERZEICHNIS namens
+      # google-key.json, und der Kalender liefe gegen eine Wand, die niemand
+      # sucht. Die Karten, die von diesen Ordnern leben, melden sich ohne sie
+      # schlicht als „nicht eingerichtet".
+      #
+      # Bewusst ORDNER statt Einzeldateien: Schreibt ein Skript seine Datei
+      # per os.replace neu, wechselt der Inode — ein Einzeldatei-Mount zeigt
+      # dann fuer immer auf die alte Fassung, ohne dass etwas auffaellt.
+      - ${BANK_ORDNER_HOST:-./leer}:/daten/bank:ro
+      - ${WIDERRUF_ORDNER_HOST:-./leer}:/daten/widerruf:ro
+      - ${WATCHDOG_ORDNER_HOST:-./leer}:/daten/watchdog:ro
+      - ${GOOGLE_ORDNER_HOST:-./leer}:/daten/google:ro
+    networks:
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+      - traefik.http.routers.${INSTANZ:-dashboard}.rule=${HOST_REGEL:?HOST_REGEL fehlt in der .env}
+      - traefik.http.routers.${INSTANZ:-dashboard}.entrypoints=websecure
+      - traefik.http.routers.${INSTANZ:-dashboard}.tls.certresolver=letsencrypt
+      - traefik.http.routers.${INSTANZ:-dashboard}.middlewares=${INSTANZ:-dashboard}-auth@docker
+      - traefik.http.services.${INSTANZ:-dashboard}.loadbalancer.server.port=8000
+      # Basic-Auth schuetzt alles. Die Hashes stehen in .env (BASIC_AUTH_USERS);
+      # dort muss jedes $ verdoppelt sein, sonst schlaegt die Anmeldung stumm fehl.
+      - traefik.http.middlewares.${INSTANZ:-dashboard}-auth.basicauth.users=${BASIC_AUTH_USERS}
+      # Zustandsauskunft bleibt offen, damit der Watchdog sie ohne Zugangsdaten
+      # abfragen kann — sie verraet nur "ok" und ein paar Zaehler.
+      - traefik.http.routers.${INSTANZ:-dashboard}-health.rule=(${HOST_REGEL:?HOST_REGEL fehlt in der .env}) && Path(`/healthz`)
+      - traefik.http.routers.${INSTANZ:-dashboard}-health.entrypoints=websecure
+      - traefik.http.routers.${INSTANZ:-dashboard}-health.tls.certresolver=letsencrypt
+      - traefik.http.routers.${INSTANZ:-dashboard}-health.priority=100
+      - traefik.http.routers.${INSTANZ:-dashboard}-health.service=${INSTANZ:-dashboard}
+      # MCP-Endpunkt fuer Claude: ohne Basic-Auth, der Token im Pfad traegt
+      # allein. Wer den Token hat, kann
+      # alles — auch schreiben. Siehe app/mcp.py.
+      - traefik.http.routers.${INSTANZ:-dashboard}-mcp.rule=(${HOST_REGEL:?HOST_REGEL fehlt in der .env}) && PathPrefix(`/mcp/`)
+      - traefik.http.routers.${INSTANZ:-dashboard}-mcp.entrypoints=websecure
+      - traefik.http.routers.${INSTANZ:-dashboard}-mcp.tls.certresolver=letsencrypt
+      - traefik.http.routers.${INSTANZ:-dashboard}-mcp.priority=100
+      - traefik.http.routers.${INSTANZ:-dashboard}-mcp.service=${INSTANZ:-dashboard}
+      # Abmelden braucht ebenfalls einen Weg an der Anmeldung vorbei — sonst
+      # fragt Traefik sofort wieder nach dem Passwort.
+      - traefik.http.routers.${INSTANZ:-dashboard}-abgemeldet.rule=(${HOST_REGEL:?HOST_REGEL fehlt in der .env}) && Path(`/abgemeldet`)
+      - traefik.http.routers.${INSTANZ:-dashboard}-abgemeldet.entrypoints=websecure
+      - traefik.http.routers.${INSTANZ:-dashboard}-abgemeldet.tls.certresolver=letsencrypt
+      - traefik.http.routers.${INSTANZ:-dashboard}-abgemeldet.priority=100
+      - traefik.http.routers.${INSTANZ:-dashboard}-abgemeldet.service=${INSTANZ:-dashboard}
+
+networks:
+  traefik:
+    external: true

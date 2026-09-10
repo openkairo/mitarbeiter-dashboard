@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ profil.TITEL }} — SMG</title>
+<script>
+/* Das Thema muss VOR dem Stylesheet stehen, sonst blitzt beim Laden kurz die
+   falsche Fassung auf. Hell ist der Standard. */
+(function () {
+  try {
+    if (localStorage.getItem("smg-buchhaltung-thema") === "dunkel") {
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+  } catch (e) { /* localStorage gesperrt — dann eben hell */ }
+})();
+</script>
+<link rel="stylesheet" href="/static/style.css?v={{ v }}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📊</text></svg>">
+</head>
+<body data-benutzer="{{ benutzer }}" data-fassung="{{ v }}"
+      data-person="{{ profil.NAME }}" data-instanz="{{ profil.INSTANZ }}"
+      data-ansprechpartner="{{ profil.ANSPRECHPARTNER }}">
+
+<div class="fassung-hinweis" id="fassung-hinweis" hidden>
+  <span>Diese Seite ist nicht mehr die aktuelle. Bis zum Neuladen können Knöpfe
+        ins Leere greifen.</span>
+  <button type="button" id="fassung-neuladen">Jetzt neu laden</button>
+</div>
+
+<aside class="leiste" id="leiste">
+  <div class="marke">
+    <span class="marke-zeichen">{{ profil.MARKE }}</span>
+    <span class="marke-text"><strong>{{ profil.TITEL }}</strong>{% if profil.FIRMA %}<small>{{ profil.FIRMA }}</small>{% endif %}</span>
+    <button class="leiste-schalter" id="leiste-schalter" type="button"
+            title="Seitenleiste einklappen" aria-label="Seitenleiste einklappen">«</button>
+  </div>
+
+  <nav class="leiste-nav" id="leiste-nav">
+    <button class="nav-punkt aktiv" data-ziel="oben" title="Übersicht">
+      <span class="nav-icon">🏠</span><span class="nav-text">Übersicht</span>
+    </button>
+    {% for k in karten + werkzeuge %}
+    <button class="nav-punkt" data-ziel="{{ k.name }}" title="{{ k.titel }}">
+      <span class="nav-icon">{{ k.icon }}</span><span class="nav-text">{{ k.titel }}</span>
+      <span class="nav-zahl" id="nav-{{ k.name }}" hidden></span>
+    </button>
+    {% endfor %}
+  </nav>
+
+  <div class="leiste-fuss">
+    <button class="nav-punkt nav-verwaltung" data-ziel="einstellungen" title="Settings">
+      <span class="nav-icon">⚙️</span><span class="nav-text">Settings</span>
+      <!-- Erscheint nur, wenn eine neue Version bereitliegt. Ein Punkt, kein
+           Text: Er soll auffallen, wenn man hinsieht, und sonst nicht stören. -->
+      <span class="nav-neu" id="nav-update" hidden></span>
+    </button>
+    <button class="hilfe" id="alles-aktualisieren" type="button">
+      <span class="hilfe-icon">🔄</span>
+      <span class="hilfe-text"><strong>Alles auffrischen</strong><small id="stand-kurz">wird geladen …</small></span>
+    </button>
+    <button class="still" id="thema-wechseln" type="button" title="Hell oder dunkel">🌙</button>
+    <button class="still" id="abmelden" type="button">abmelden</button>
+  </div>
+</aside>
+
+<main class="flaeche">
+  <header class="kopf" id="oben">
+    <div class="kopf-text">
+      <h1 id="gruss">Guten Tag, {{ profil.NAME }}!</h1>
+      <p class="kopf-unter" id="kopf-unter">Das ist deine Übersicht für heute.</p>
+      <button class="zurueck" id="zurueck" type="button">← Zurück zur Übersicht</button>
+      <p class="zeitzeile" id="zeitzeile" hidden></p>
+    </div>
+    <div class="kopf-werkzeug">
+      <label class="suchfeld">
+        <span aria-hidden="true">🔎</span>
+        <input type="search" id="suche" placeholder="Suche in allen Karten — Name, Betrag, Belegnummer …">
+      </label>
+      <div class="kopf-person">
+        <span class="datum" id="datum">{{ heute }}</span>
+        <span class="avatar" title="{{ benutzer }}">{{ benutzer[:2]|upper }}</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="nachrichten" id="nachrichten" hidden aria-live="polite"></section>
+
+  <section class="kopfzahlen" id="kopfzahlen" aria-label="Wichtigste Zahlen">
+    {% for _ in kopfzahlen %}<div class="kopfzahl skelett"></div>{% endfor %}
+  </section>
+
+  <section class="raster" id="raster">
+    <article class="karte karte-fortschritt" id="karte-fortschritt">
+      <header class="karte-kopf">
+        <span class="karte-icon">🎯</span>
+        <h2>Tagesfortschritt</h2>
+      </header>
+      <div class="karte-koerper fortschritt">
+        <div class="ring" id="ring">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="ring-spur" cx="60" cy="60" r="52"></circle>
+            <circle class="ring-wert" cx="60" cy="60" r="52" id="ring-wert"></circle>
+          </svg>
+          <div class="ring-mitte"><strong id="ring-zahl">–</strong><small>erledigt</small></div>
+        </div>
+        <ul class="fortschritt-liste">
+          <li><i class="punkt gruen"></i><span id="f-erledigt">–</span> erledigt</li>
+          <li><i class="punkt blau"></i><span id="f-offen">–</span> offen</li>
+          <li><i class="punkt rot"></i><span id="f-dringend">–</span> dringend</li>
+        </ul>
+        <p class="fortschritt-erkannt" id="fortschritt-erkannt" hidden></p>
+        <p class="fortschritt-satz" id="fortschritt-satz"></p>
+      </div>
+    </article>
+
+    {% for k in karten %}
+    <article class="karte" id="karte-{{ k.name }}" data-karte="{{ k.name }}" draggable="true">
+      <header class="karte-kopf">
+        <button class="griff" type="button" title="Karte verschieben" aria-label="verschieben">⠿</button>
+        <span class="karte-icon">{{ k.icon }}</span>
+        <h2>{{ k.titel }}</h2>
+        <span class="badge" hidden></span>
+        <i class="punkt" title="Lage"></i>
+        <div class="karte-knoepfe">
+          <button class="still hoch" type="button" title="nach oben">↑</button>
+          <button class="still runter" type="button" title="nach unten">↓</button>
+          <button class="still auffrischen" type="button" title="jetzt auffrischen">⟳</button>
+          <button class="still klappen" type="button" title="ein-/ausklappen">▾</button>
+        </div>
+      </header>
+      <div class="kennzahlen"></div>
+      <div class="karte-koerper">
+        <ul class="posten">
+          <li class="skelett-zeile"></li>
+          <li class="skelett-zeile"></li>
+          <li class="skelett-zeile"></li>
+        </ul>
+        <p class="karte-hinweis" hidden></p>
+        <p class="karte-fehler" hidden></p>
+      </div>
+      <footer class="karte-fuss">
+        <button class="still erledigte-zeigen" type="button" hidden></button>
+        <button class="karte-stand" type="button" title="jetzt auffrischen"></button>
+        {% if k.link_text %}<a class="karte-link" target="_blank" rel="noopener" hidden>{{ k.link_text }} öffnen ↗</a>{% endif %}
+      </footer>
+    </article>
+    {% endfor %}
+
+    {% for w in werkzeuge %}
+    <article class="karte karte-werkzeug" id="karte-{{ w.name }}"
+             data-karte="{{ w.name }}" data-werkzeug="{{ w.name }}"
+             data-eingerichtet="{{ "ja" if w.eingerichtet else "nein" }}" draggable="true">
+      <header class="karte-kopf">
+        <button class="griff" type="button" title="Karte verschieben" aria-label="verschieben">⠿</button>
+        <span class="karte-icon">{{ w.icon }}</span>
+        <h2>{{ w.titel }}</h2>
+        <div class="karte-knoepfe">
+          <button class="still hoch" type="button" title="nach oben">↑</button>
+          <button class="still runter" type="button" title="nach unten">↓</button>
+          <button class="still klappen" type="button" title="ein-/ausklappen">▾</button>
+        </div>
+      </header>
+      <div class="karte-koerper">
+        <label class="faq-feld">
+          <span>Kundenfrage</span>
+          <textarea id="faq-frage" rows="2"
+                    placeholder="z. B. Wie lange dauert die Lieferung?"></textarea>
+        </label>
+        <div class="faq-knoepfe">
+          <button class="knopf-haupt" id="faq-fragen" type="button">Nachschlagen</button>
+          <span class="e-ergebnis" id="faq-stand"></span>
+        </div>
+        <p class="faq-merke">Die Antwort kommt immer aus einem vorhandenen
+          Eintrag. Passt die genannte Fundstelle nicht zur Frage, weiß die
+          Wissensbasis es nicht — dann nicht raten.</p>
+        <div class="faq-antwort" id="faq-antwort" hidden></div>
+        <p class="karte-fehler" hidden></p>
+        <ul class="posten faq-verlauf" id="faq-verlauf"></ul>
+      </div>
+      <footer class="karte-fuss">
+        {% if w.link_text %}<a class="karte-link" href="{{ w.link }}" target="_blank"
+           rel="noopener">{{ w.link_text }} öffnen ↗</a>{% endif %}
+      </footer>
+    </article>
+    {% endfor %}
+  </section>
+
+  <!-- Karten, für die noch kein Zugang hinterlegt ist. Sie stehen nicht im
+       Raster: Eine leere Karte sähe aus wie Feierabend. -->
+  <p class="karten-fehlend" id="karten-fehlend" hidden></p>
+
+  <section class="einstellungen" id="einstellungen" hidden>
+    <p class="einstellungen-vorwort">
+      Die Zugangsdaten liegen auf dem Server in der <code>.env</code> und wurden dort
+      eingerichtet — hier lassen sie sich ändern, ohne sich am Server anzumelden.
+      Ein leeres Feld bedeutet: es gilt wieder der Wert aus der <code>.env</code>.
+      Gespeicherte Geheimnisse werden nie zurück angezeigt, nur ihre letzten vier Zeichen.
+    </p>
+    <nav class="e-reiter" id="e-reiter" aria-label="Bereiche"></nav>
+    <div id="einstellungen-gruppen"></div>
+
+    <div class="e-gruppe" id="postfach-kasten" data-bereich="Postfächer">
+      <div class="e-gruppe-kopf">
+        <h3>✉️ Postfächer</h3>
+        <button class="e-pruefen" id="postfach-neu" type="button">+ Postfach</button>
+      </div>
+      <p class="mcp-text">
+        Beliebig viele Postfächer, auch bei verschiedenen Anbietern und auf
+        verschiedenen Wegen: Jedes trägt selbst, ob es über die
+        <strong>Anbieter-API</strong> oder per <strong>IMAP</strong> gelesen wird.
+        Die Karte „Posteingang“ führt sie zusammen und zeigt bei jeder Zeile,
+        aus welchem Postfach sie kommt. Gelesen wird nur; nichts wird als
+        gelesen markiert. <strong>Löschen entfernt auch den hinterlegten
+        Zugang</strong> — ein Postfach, das keiner mehr braucht, soll keine
+        Zugangsdaten zurücklassen.
+      </p>
+      <div id="postfach-liste"></div>
+    </div>
+
+    <div class="e-gruppe mcp-kasten" id="mcp-kasten" data-bereich="KI-Zugang" hidden>
+      <div class="e-gruppe-kopf"><h3>🤖 Zugang für eine KI</h3></div>
+      <p class="mcp-text">
+        Über diese Adresse kann Claude das Dashboard lesen und bedienen —
+        Karten abrufen, Posten abhaken, Notizen schreiben, Verbindungen prüfen.
+      </p>
+      <div class="mcp-adresse"><code id="mcp-adresse">—</code></div>
+      <div class="mcp-knoepfe">
+        <button class="knopf-haupt" id="mcp-kopieren" type="button">Adresse kopieren</button>
+        <button class="e-pruefen" id="mcp-zeigen" type="button">Anzeigen</button>
+        <span class="e-ergebnis" id="mcp-meldung"></span>
+      </div>
+      <p class="mcp-warnung">
+        <strong>Wer diese Adresse hat, kann alles</strong> — auch Zugangsdaten ändern,
+        und zwar ohne Passwort. Nicht per Chat oder E-Mail weitergeben.
+        Ist sie doch einmal abhandengekommen: neuen Token auf dem Server erzeugen
+        (<code>openssl rand -hex 24</code>), in der <code>.env</code> unter
+        <code>MCP_TOKEN</code> eintragen, Container neu starten.
+      </p>
+      <details class="mcp-details">
+        <summary>Einrichten und was die KI damit kann</summary>
+        <p class="mcp-text">In Claude Code:</p>
+        <div class="mcp-adresse"><code id="mcp-befehl">—</code></div>
+        <p class="mcp-text">
+          In claude.ai oder Claude Desktop: Einstellungen → Connectors →
+          <em>Benutzerdefinierten Connector hinzufügen</em>, Adresse eintragen.
+        </p>
+        <ul class="mcp-liste" id="mcp-werkzeuge"></ul>
+      </details>
+    </div>
+    <div class="einstellungen-fuss">
+      <button class="knopf-haupt" id="einstellungen-speichern" type="button">Speichern</button>
+      <span class="einstellungen-meldung" id="einstellungen-meldung"></span>
+    </div>
+
+    <!-- Steht bewusst UNTER dem Speichern-Knopf und ausserhalb der Reiter:
+         Das hier ist kein Zugang, den man eintraegt, sondern eine Handlung am
+         Server. Zwischen Lexware und Superchat waere es ein Knopf, den man
+         beim Suchen nach einem Schluessel versehentlich trifft. -->
+    <h3 class="wartung-titel">Wartung</h3>
+    <div class="e-gruppe wartung" id="update-kasten">
+      <div class="e-gruppe-kopf">
+        <h3>⬆️ Neue Version aufspielen</h3>
+        <button class="e-pruefen" id="update-pruefen" type="button">Nachsehen</button>
+      </div>
+      <p class="mcp-text">
+        Holt den aktuellen Stand aus dem Code-Verzeichnis und baut dieses
+        Dashboard neu. <strong>Zugangsdaten, Haken, Notizen und Nachrichten
+        bleiben unberührt</strong> — angefasst werden nur Programmdateien.
+        Andere Dashboards auf demselben Server bleiben, wie sie sind; jedes
+        wird einzeln aktualisiert. Geht etwas schief, kommt automatisch der
+        vorherige Stand zurück.
+      </p>
+      <div id="update-stand"></div>
+    </div>
+
+  </section>
+
+  <p class="fuss">
+    Fragen oder etwas stimmt nicht?
+    {% if profil.ANSPRECHPARTNER %}Schreib {{ profil.ANSPRECHPARTNER }}.{% else %}Wende dich an dein Team.{% endif %}
+    Die Zahlen kommen aus den angebundenen Systemen — geändert wird dort,
+    nicht hier.
+  </p>
+</main>
+
+<script src="/static/app.js?v={{ v }}"></script>
+</body>
+</html>
