@@ -118,8 +118,13 @@ git -C "$REPO" reset --hard --quiet origin/main
 # Was dort liegt, IST der Stand — eine Notiz daneben koennte falsch sein.
 HIER_F="$(fassung "$ORDNER")"
 NEU_F="$(git -C "$REPO" show origin/main:VERSION 2>/dev/null | tr -d " \t\n\r" || echo "")"
+# Der erste Abschnitt mit einer NUMMER, nicht einfach der oberste: Ganz oben
+# steht die Sammelstelle „Unveroeffentlicht“, und die waere sonst der Titel der
+# bereitliegenden Version.
 LISTE="$(git -C "$REPO" show origin/main:CHANGELOG.md 2>/dev/null \
-         | awk '/^## /{n++; if(n==1){next}} n==1 && NF' | head -12 || true)"
+         | awk '/^## [0-9]/ { if (drin) exit; drin=1; next }
+                /^## /      { if (drin) exit; next }
+                drin && NF  { print }' | head -12 || true)"
 
 if [[ "$MODUS" == "pruefen" ]]; then
     if [[ -n "$NEU_F" && "$NEU_F" == "$HIER_F" ]]; then

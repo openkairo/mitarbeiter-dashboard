@@ -14,6 +14,12 @@ jedem einzelnen Arbeitsschritt.
 
 *Zurzeit nichts.*
 
+## 1.2.1 — 10.09.2026
+
+- Der Update-Kasten zeigte als Änderungsliste die leere Sammelstelle
+  „Unveröffentlicht" statt der Punkte der bereitliegenden Version. Genommen
+  wird jetzt der erste Abschnitt mit einer **Nummer**.
+
 ## 1.2.0 — 10.09.2026
 
 Diese Fassung macht das Dashboard auf einem fremden Server installierbar.

@@ -704,11 +704,15 @@ def _aenderungen_hier() -> list:
         return []
     # Ein Punkt bricht in der Datei ueber mehrere Zeilen um. Ohne das
     # Zusammenziehen stuenden auf der Seite Satzfetzen.
+    # Der erste Abschnitt mit einer NUMMER. Ganz oben steht die Sammelstelle
+    # „Unveröffentlicht“ — die ist noch keine Fassung und gehört nicht hierher.
     raus, drin = [], False
     for zeile in zeilen:
         if zeile.startswith("## "):
             if drin:
                 break
+            if not zeile[3:4].isdigit():
+                continue
             drin = True
             continue
         if not drin or not zeile.strip():
