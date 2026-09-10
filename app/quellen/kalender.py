@@ -42,7 +42,17 @@ ABHAKBAR = False
 ZONE = ZoneInfo("Europe/Berlin")
 VORAUS_TAGE = 14
 # Wessen Kalender das hier ist, sagt das Profil.
-RE_PERSON = profil.RE_PERSON
+def _re_person(env: dict):
+    """Das Namensmuster beim Abruf bilden, nicht beim Import.
+
+    Wer den Namen im Einrichtungsassistenten eintraegt, soll ihn wirken sehen,
+    ohne den Container neu zu starten. Ohne Namen darf das Muster NIE greifen —
+    `(?!)` schlaegt immer fehl.
+    """
+    name = (env.get("PERSON_NAME") or profil.NAME).strip()
+    if not name:
+        return re.compile(r"(?!)")
+    return re.compile(r"\b" + re.escape(name) + r"\b", re.IGNORECASE)
 # Termine aus der Terminbuchungsseite tragen "Mitarbeiter: <name>" in der
 # Beschreibung. Das heisst "von dieser Person gebucht" — fuer die
 # Beratungen ist das der einzige Bezug, den der Titel nicht hergibt.
@@ -82,7 +92,8 @@ def _spanne(termin: dict):
 
 
 def fetch(env: dict) -> dict:
-    key = env.get("GOOGLE_KEY") or "/daten/google-key.json"
+    re_person = _re_person(env)
+    key = env.get("GOOGLE_KEY") or "/daten/google/google-key.json"
     # Ohne Kennung kein Kalender: Eine fremde Adresse als Vorgabe waere
     # ein Zugriffsversuch auf einen Kalender, der uns nicht gehoert.
     kalender_id = (env.get("KALENDER_ID") or "").strip()
@@ -125,7 +136,7 @@ def fetch(env: dict) -> dict:
                             or bool(t.get("attendees")))
 
         # --- Was sagt der Kalender ueber die Person dieses Dashboards?
-        if RE_PERSON.search(titel) and not ist_kundentermin:
+        if re_person.search(titel) and not ist_kundentermin:
             abwesend = any(w in unten for w in FREI)
             if laeuft_heute and person_heute is None:
                 person_heute = not abwesend
@@ -147,7 +158,7 @@ def fetch(env: dict) -> dict:
 
         # In die Karte kommt: heute alles, spaeter nur, was diese Person
         # angeht — im Titel oder als Mitarbeiter der Buchung.
-        eigener_bezug = (bool(RE_PERSON.search(titel)) and not ist_kundentermin) \
+        eigener_bezug = (bool(re_person.search(titel)) and not ist_kundentermin) \
             or bool(RE_MITARBEITER.search(beschreibung))
         if not laeuft_heute and not eigener_bezug:
             continue

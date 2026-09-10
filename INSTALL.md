@@ -74,8 +74,14 @@ Ein anderer Ort geht mit `--ordner`.
 
 ## Danach: Karten einrichten
 
-Nach der Installation ist das Dashboard leer — **das ist richtig so**. Jede
-Karte erscheint, sobald ihre Zugangsdaten unter *Settings* stehen. Bis dahin
+Beim ersten Aufruf führt ein **Assistent** durch die Einrichtung: erst Name
+und Rolle, dann Karte für Karte die Zugänge, jede mit „Speichern und prüfen"
+und jede überspringbar. Er verschwindet, sobald eine Person eingetragen und
+eine Karte eingerichtet ist; unter *Settings → Wartung* lässt er sich jederzeit
+wieder öffnen.
+
+Ein frisch aufgesetztes Dashboard ist leer — **das ist richtig so**. Jede
+Karte erscheint, sobald ihre Zugangsdaten stehen; bis dahin
 steht sie unter dem Raster in einer Zeile „noch nicht eingerichtet". Eine
 Karte, die „Nichts offen" zeigt, weil niemand nachgesehen hat, behauptet
 Feierabend.

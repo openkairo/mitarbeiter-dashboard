@@ -30,6 +30,22 @@ from . import db, profil
 # Die Auswahl zeichnet ein Klappfeld statt eines Textfelds; "optional" heisst,
 # dass ein leeres Feld kein Fehler ist. Beide Angaben duerfen fehlen.
 FELDER = [
+    # Wer das Dashboard benutzt. Steht auch in der .env, laesst sich aber hier
+    # aendern — der Einrichtungsassistent fragt genau danach, und ein Name,
+    # fuer den man einen Neustart braucht, ist kein Name, den man eintraegt.
+    ("PERSON_NAME", "Name", "Person", False,
+     "Steht in der Begrüßung oben. Leer lassen heißt: Begrüßung ohne Namen.",
+     None, True),
+    ("TITEL", "Rolle", "Person", False,
+     "Die Überschrift in der Seitenleiste — etwa „Buchhaltung“ oder „Support“.",
+     None, True),
+    ("FIRMA", "Firma", "Person", False,
+     "Die kleine Zeile darunter. Leer lassen, wenn dort nichts stehen soll.",
+     None, True),
+    ("ANSPRECHPARTNER", "Hilfe von", "Person", False,
+     "Wer hilft, wenn etwas unklar ist. Steht im Fuß der Seite und bei einer "
+     "Abwesenheit im Kalender.", None, True),
+
     ("LEXWARE_API_KEY", "API-Schlüssel", "Lexware", True,
      "Steuert die Karte „Offene Ausgangsrechnungen“. In Lexware unter "
      "Einstellungen → Öffentliche API."),

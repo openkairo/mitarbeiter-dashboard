@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ profil.TITEL }} — SMG</title>
+<title>{{ profil.TITEL }}{% if profil.FIRMA %} — {{ profil.FIRMA }}{% endif %}</title>
 <script>
 /* Das Thema muss VOR dem Stylesheet stehen, sonst blitzt beim Laden kurz die
    falsche Fassung auf. Hell ist der Standard. */
@@ -89,6 +89,10 @@
   <section class="kopfzahlen" id="kopfzahlen" aria-label="Wichtigste Zahlen">
     {% for _ in kopfzahlen %}<div class="kopfzahl skelett"></div>{% endfor %}
   </section>
+
+  <!-- Erstinstallation: fragt Namen und Zugänge ab. Zeigt sich nur, solange
+       nichts eingerichtet ist, und ist in den Einstellungen wieder zu öffnen. -->
+  <section class="assistent" id="assistent" hidden></section>
 
   <section class="raster" id="raster">
     <article class="karte karte-fortschritt" id="karte-fortschritt">
@@ -272,6 +276,19 @@
         vorherige Stand zurück.
       </p>
       <div id="update-stand"></div>
+    </div>
+
+    <!-- Der Assistent vom ersten Tag. Wer ihn zu frueh weggeklickt hat oder
+         spaeter eine Karte nachtragen will, kommt hier wieder hin. -->
+    <div class="e-gruppe wartung" id="assistent-kasten">
+      <div class="e-gruppe-kopf">
+        <h3>🧭 Einrichtung</h3>
+        <button class="e-pruefen" id="assistent-oeffnen" type="button">Assistent öffnen</button>
+      </div>
+      <p class="mcp-text">
+        Geht Schritt für Schritt durch Name und Zugänge. Ändert nichts von
+        selbst — du trägst ein, was du willst, und speicherst wie hier auch.
+      </p>
     </div>
 
   </section>

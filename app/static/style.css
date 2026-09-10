@@ -1036,3 +1036,68 @@ body.leiste-zu .nav-neu { margin-left: 0; position: absolute; top: 8px; right: 8
 .update-aenderungen { margin: 0 0 .9rem; font-size: .85rem; }
 .update-aenderungen ul { margin: .35rem 0 0; padding-left: 1.2rem; }
 .update-aenderungen li { margin-bottom: .25rem; color: var(--text-leise); }
+
+/* ------------------------------------------------- Einrichtungsassistent */
+
+/* Steht anstelle des Rasters, solange nichts eingerichtet ist. Bewusst
+   schmal: Wer hier ist, soll lesen und tippen, nicht scannen. */
+.assistent {
+  max-width: 46rem;
+  margin: 0 auto 2rem;
+}
+
+.assi-kopf { margin-bottom: 1.4rem; }
+.assi-kopf h2 { margin: 0 0 .4rem; font-size: 1.4rem; }
+.assi-kopf p { margin: 0; color: var(--text-leise); line-height: 1.5; }
+
+.assi-schritt {
+  background: var(--karte);
+  border: 1px solid var(--rand);
+  border-radius: 12px;
+  box-shadow: var(--schatten);
+  padding: 1.1rem 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.assi-schritt h3 { margin: 0 0 .8rem; font-size: 1.05rem; }
+.assi-hinweis { color: var(--text-leise); font-size: .85rem; line-height: 1.5; margin: 0 0 .8rem; }
+.assi-fuss { margin-top: .9rem; }
+
+.assi-karte {
+  border: 1px solid var(--rand);
+  border-radius: 9px;
+  padding: .6rem .8rem;
+  margin-bottom: .6rem;
+  background: var(--karte-still);
+}
+
+.assi-karte > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: .15rem 0;
+}
+.assi-karte > summary::-webkit-details-marker { display: none; }
+.assi-icon { margin-right: .5rem; }
+
+.assi-stand {
+  float: right;
+  font-size: .74rem;
+  color: var(--text-leise);
+  border: 1px solid var(--rand);
+  border-radius: 999px;
+  padding: .1rem .55rem;
+  background: var(--karte);
+}
+
+.assi-karte.fertig { border-color: var(--gruen); }
+.assi-karte.fertig .assi-stand {
+  color: var(--gruen);
+  border-color: var(--gruen);
+  background: var(--gruen-still);
+}
+
+.assi-karte[open] > summary { margin-bottom: .8rem; }
+.assi-karte .e-feld input { width: 100%; }
+
+.assi-ende { text-align: center; }
+.assi-ende .assi-hinweis { margin: .8rem 0 0; }

@@ -739,6 +739,86 @@ def _update_stand() -> dict:
         return {}
 
 
+# ------------------------------------------------------ Einrichtungsassistent
+
+# Ein frisch installiertes Dashboard ist leer — richtig so, aber ohne Fuehrung
+# steht man davor und weiss nicht, wo man anfaengt. Der Assistent fragt zuerst
+# den Namen und geht danach die Karten durch: je Karte die Felder, die sie
+# braucht, und ein Knopf zum Pruefen. Er zeigt sich nur, solange nichts
+# eingerichtet ist, und laesst sich in den Einstellungen wieder oeffnen.
+
+def _einrichtung() -> dict:
+    umg = einstellungen.umgebung()
+    felder = einstellungen.uebersicht()
+    karte_je_gruppe = einstellungen.GRUPPE_KARTE
+
+    schritte = []
+    for modul in list(quellen.REGISTRY) + list(quellen.WERKZEUGE):
+        gruppen = [g for g, k in karte_je_gruppe.items() if k == modul.NAME]
+        eigene = [f for f in felder if f["gruppe"] in gruppen]
+        # Karten ohne eigene Felder (Bank, Widerrufe) haengen an gemounteten
+        # Ordnern — dafuer gibt es im Assistenten nichts einzutragen.
+        if not eigene:
+            continue
+        schritte.append({
+            "karte": modul.NAME,
+            "titel": modul.TITEL,
+            "icon": modul.ICON,
+            "eingerichtet": quellen.ist_eingerichtet(modul, umg),
+            "braucht": list(getattr(modul, "BRAUCHT", ())),
+            "felder": eigene,
+        })
+
+    # Der Posteingang hat keine Einstellungsfelder — er haengt an angelegten
+    # Postfaechern. Ohne eigenen Schritt fehlte er im Assistenten ganz.
+    mail_modul = quellen.BEKANNT.get("mail")
+    if mail_modul is not None:
+        schritte.append({
+            "karte": "mail", "titel": mail_modul.TITEL, "icon": mail_modul.ICON,
+            "eingerichtet": quellen.ist_eingerichtet(mail_modul, umg),
+            "braucht": [], "felder": [],
+            "postfaecher": True,
+        })
+
+    fertig = bool(db.kv_lesen("einrichtung_erledigt"))
+    irgendwas_da = any(s["eingerichtet"] for s in schritte)
+    return {
+        "noetig": not fertig and not irgendwas_da,
+        "erledigt": fertig,
+        "person": {
+            "PERSON_NAME": (umg.get("PERSON_NAME") or "").strip(),
+            "TITEL": (umg.get("TITEL") or "").strip(),
+            "FIRMA": (umg.get("FIRMA") or "").strip(),
+            "ANSPRECHPARTNER": (umg.get("ANSPRECHPARTNER") or "").strip(),
+        },
+        "schritte": schritte,
+    }
+
+
+@app.get("/api/einrichtung")
+def api_einrichtung():
+    return _einrichtung()
+
+
+@app.post("/api/einrichtung/fertig")
+def api_einrichtung_fertig(request: Request):
+    """Der Assistent ist durch — er meldet sich nicht mehr von selbst.
+
+    Bewusst ein eigener Merker und nicht „irgendeine Karte ist eingerichtet":
+    Wer bewusst nur mit zwei Karten arbeitet, soll nicht bei jedem Laden
+    gefragt werden, ob er nicht doch noch etwas einrichten will.
+    """
+    db.kv_schreiben("einrichtung_erledigt", datetime.now().isoformat(timespec="seconds"))
+    log.info("Einrichtungsassistent abgeschlossen von %s", benutzer(request))
+    return {"erledigt": True}
+
+
+@app.post("/api/einrichtung/erneut")
+def api_einrichtung_erneut():
+    db.kv_schreiben("einrichtung_erledigt", "")
+    return _einrichtung()
+
+
 @app.get("/api/update")
 def api_update_stand():
     stand = _update_stand()
@@ -885,7 +965,18 @@ def start(request: Request):
                        "eingerichtet": quellen.ist_eingerichtet(m, umg)}
                       for m in quellen.WERKZEUGE],
         "kopfzahlen": quellen.KOPFZAHLEN,
-        "profil": profil,
+        # Nicht das Modul selbst, sondern die GELTENDEN Werte: Was jemand im
+        # Assistenten eintraegt, soll beim naechsten Laden dastehen und nicht
+        # erst nach einem Neustart.
+        "profil": {
+            "NAME": (umg.get("PERSON_NAME") or profil.NAME).strip(),
+            "TITEL": (umg.get("TITEL") or profil.TITEL).strip(),
+            "FIRMA": (umg.get("FIRMA") or profil.FIRMA).strip(),
+            "ANSPRECHPARTNER": (umg.get("ANSPRECHPARTNER")
+                                or profil.ANSPRECHPARTNER).strip(),
+            "INSTANZ": profil.INSTANZ,
+            "MARKE": ((umg.get("TITEL") or profil.TITEL).strip()[:1] or "D").upper(),
+        },
         "heute": date.today().strftime("%d.%m.%Y"),
     })
     antwort.headers["Cache-Control"] = "no-cache, must-revalidate"

@@ -535,6 +535,222 @@
     }
   }
 
+  /* --------------------------------------------- Einrichtungsassistent */
+
+  /* Ein frisch installiertes Dashboard ist leer — richtig so, aber ohne
+     Führung steht man davor und weiß nicht, wo man anfängt. Der Assistent
+     fragt zuerst den Namen und geht danach die Karten durch.
+
+     Er blendet das Raster aus, solange er läuft: Ein halb gefülltes Dashboard
+     daneben würde ablenken und den Eindruck erwecken, es sei schon fertig. */
+
+  function assistentZeigen(d) {
+    var kasten = document.getElementById("assistent");
+    var raster = document.getElementById("raster");
+    if (!kasten) { return; }
+    kasten.hidden = false;
+    if (raster) { raster.hidden = true; }
+    var fehlend = document.getElementById("karten-fehlend");
+    if (fehlend) { fehlend.hidden = true; }
+    leeren(kasten);
+
+    var kopf = bauen("div", "assi-kopf");
+    kopf.appendChild(bauen("h2", "", "Willkommen — richten wir dein Dashboard ein"));
+    kopf.appendChild(bauen("p", "",
+      "Zwei Schritte: erst dein Name, dann die Zugänge. Jede Karte erscheint, "
+      + "sobald ihr Zugang steht — was du überspringst, kannst du später unter "
+      + "Settings nachtragen."));
+    kasten.appendChild(kopf);
+
+    /* --- Schritt 1: die Person ------------------------------------------ */
+    var eins = bauen("div", "assi-schritt");
+    eins.appendChild(bauen("h3", "", "1. Für wen ist dieses Dashboard?"));
+    var pfelder = {};
+    var personFelder = [
+      ["PERSON_NAME", "Name", "Steht in der Begrüßung oben.", "z. B. Alex"],
+      ["TITEL", "Rolle", "Die Überschrift in der Seitenleiste.", "z. B. Buchhaltung"],
+      ["FIRMA", "Firma", "Die kleine Zeile darunter. Darf leer bleiben.", ""],
+      ["ANSPRECHPARTNER", "Hilfe von", "Wer hilft, wenn etwas unklar ist. Darf leer bleiben.", ""]
+    ];
+    for (var i = 0; i < personFelder.length; i++) {
+      var pf = personFelder[i];
+      var feld = bauen("div", "e-feld");
+      var b = bauen("label", "", pf[1]);
+      b.setAttribute("for", "assi-" + pf[0]);
+      feld.appendChild(b);
+      var ein = document.createElement("input");
+      ein.id = "assi-" + pf[0];
+      ein.type = "text";
+      ein.value = (d.person && d.person[pf[0]]) || "";
+      if (pf[3]) { ein.placeholder = pf[3]; }
+      feld.appendChild(ein);
+      feld.appendChild(bauen("div", "e-hilfe", pf[2]));
+      eins.appendChild(feld);
+      pfelder[pf[0]] = ein;
+    }
+    var personMeldung = bauen("span", "e-ergebnis", "");
+    var personSpeichern = bauen("button", "knopf-haupt", "Speichern");
+    personSpeichern.type = "button";
+    personSpeichern.addEventListener("click", function () {
+      var werte = {};
+      for (var k in pfelder) {
+        if (Object.prototype.hasOwnProperty.call(pfelder, k)) { werte[k] = pfelder[k].value; }
+      }
+      personSpeichern.disabled = true;
+      personMeldung.className = "e-ergebnis";
+      personMeldung.textContent = "wird gespeichert …";
+      holen("/api/einstellungen", "POST", { werte: werte }).then(function () {
+        personMeldung.className = "e-ergebnis gut";
+        personMeldung.textContent = "✓ gespeichert — steht beim nächsten Laden oben";
+      }).catch(function (f) {
+        personMeldung.className = "e-ergebnis schlecht";
+        personMeldung.textContent = "✗ " + f.message;
+      }).then(function () { personSpeichern.disabled = false; });
+    });
+    var pfuss = bauen("div", "assi-fuss");
+    pfuss.appendChild(personSpeichern);
+    pfuss.appendChild(personMeldung);
+    eins.appendChild(pfuss);
+    kasten.appendChild(eins);
+
+    /* --- Schritt 2: die Zugänge ----------------------------------------- */
+    var zwei = bauen("div", "assi-schritt");
+    zwei.appendChild(bauen("h3", "", "2. Welche Karten möchtest du?"));
+    zwei.appendChild(bauen("p", "assi-hinweis",
+      "Trag ein, was du hast. Alles andere lässt du frei — die Karte bleibt "
+      + "dann einfach aus, und nichts geht kaputt."));
+    for (var s = 0; s < d.schritte.length; s++) {
+      zwei.appendChild(assiKarte(d.schritte[s]));
+    }
+    kasten.appendChild(zwei);
+
+    /* --- Abschluss ------------------------------------------------------ */
+    var ende = bauen("div", "assi-schritt assi-ende");
+    var fertig = bauen("button", "knopf-haupt", "Fertig — zum Dashboard");
+    fertig.type = "button";
+    fertig.addEventListener("click", function () {
+      fertig.disabled = true;
+      holen("/api/einrichtung/fertig", "POST", {}).then(function () {
+        window.location.href = window.location.pathname + "?frisch=" + Date.now();
+      }).catch(function () { fertig.disabled = false; });
+    });
+    ende.appendChild(fertig);
+    ende.appendChild(bauen("p", "assi-hinweis",
+      "Du kannst den Assistenten später unter Settings → Wartung wieder öffnen."));
+    kasten.appendChild(ende);
+  }
+
+  function assistentSchliessen() {
+    var kasten = document.getElementById("assistent");
+    if (!kasten || kasten.hidden) { return; }
+    kasten.hidden = true;
+    leeren(kasten);
+    var raster = document.getElementById("raster");
+    if (raster) { raster.hidden = false; }
+  }
+
+  function assiKarte(schritt) {
+    var block = bauen("details", "assi-karte");
+    if (schritt.eingerichtet) { block.className += " fertig"; }
+    var titel = document.createElement("summary");
+    titel.appendChild(bauen("span", "assi-icon", schritt.icon));
+    titel.appendChild(bauen("strong", "", schritt.titel));
+    titel.appendChild(bauen("span", "assi-stand",
+      schritt.eingerichtet ? "eingerichtet" : "offen"));
+    block.appendChild(titel);
+
+    // Der Posteingang hat keine Felder, sondern Postfächer — dafür gibt es
+    // einen eigenen Editor in den Einstellungen.
+    if (schritt.postfaecher) {
+      var p = bauen("p", "assi-hinweis",
+        "Postfächer legst du unter Settings → Postfächer an, je Postfach "
+        + "entweder über die Anbieter-API oder per IMAP.");
+      block.appendChild(p);
+      var hin = bauen("a", "", "Zu den Postfächern");
+      hin.href = "#einstellungen";
+      block.appendChild(hin);
+      return block;
+    }
+
+    var eingaben = {};
+    for (var i = 0; i < schritt.felder.length; i++) {
+      var f = schritt.felder[i];
+      var noetig = schritt.braucht.indexOf(f.schluessel) !== -1;
+      var feld = bauen("div", "e-feld");
+      var b = bauen("label", "", f.titel + (noetig ? "" : " (optional)"));
+      b.setAttribute("for", "assi-" + f.schluessel);
+      feld.appendChild(b);
+      var ein;
+      if (f.auswahl && f.auswahl.length) {
+        // Steht der Schluessel schon, liefert der Server die Liste — dann ist
+        // Tippen einer Kennung wie „ib_…“ nur eine Fehlerquelle.
+        ein = document.createElement("select");
+        for (var w = 0; w < f.auswahl.length; w++) {
+          var opt = document.createElement("option");
+          opt.value = f.auswahl[w].wert;
+          opt.appendChild(document.createTextNode(f.auswahl[w].titel));
+          if (f.auswahl[w].wert === f.wert) { opt.selected = true; }
+          ein.appendChild(opt);
+        }
+      } else {
+        ein = document.createElement("input");
+        ein.type = "text";
+      }
+      ein.id = "assi-" + f.schluessel;
+      ein.setAttribute("autocomplete", "off");
+      if (f.geheim) {
+        ein.value = "";
+        ein.placeholder = f.gesetzt ? "hinterlegt — zum Ändern neu eintragen" : "";
+      } else {
+        ein.value = f.wert || "";
+      }
+      feld.appendChild(ein);
+      if (f.hilfe) { feld.appendChild(bauen("div", "e-hilfe", f.hilfe)); }
+      block.appendChild(feld);
+      eingaben[f.schluessel] = ein;
+    }
+
+    var meldung = bauen("span", "e-ergebnis", "");
+    var knopf = bauen("button", "knopf-haupt", "Speichern und prüfen");
+    knopf.type = "button";
+    knopf.addEventListener("click", function () {
+      var werte = {};
+      for (var k in eingaben) {
+        if (!Object.prototype.hasOwnProperty.call(eingaben, k)) { continue; }
+        if (!eingaben[k].value) { continue; }   // leer heißt "unverändert"
+        werte[k] = eingaben[k].value;
+      }
+      knopf.disabled = true;
+      meldung.className = "e-ergebnis";
+      meldung.textContent = "wird gespeichert …";
+      holen("/api/einstellungen", "POST", { werte: werte }).then(function () {
+        meldung.textContent = "wird geprüft …";
+        return holen("/api/einstellungen/pruefen/" + schritt.karte, "POST");
+      }).then(function (a) {
+        meldung.className = "e-ergebnis " + (a.ok ? "gut" : "schlecht");
+        meldung.textContent = (a.ok ? "✓ " : "✗ ") + a.meldung;
+        if (a.ok) {
+          block.className = "assi-karte fertig";
+          block.querySelector(".assi-stand").textContent = "eingerichtet";
+        }
+      }).catch(function (f) {
+        meldung.className = "e-ergebnis schlecht";
+        meldung.textContent = "✗ " + f.message;
+      }).then(function () { knopf.disabled = false; });
+    });
+    var fuss = bauen("div", "assi-fuss");
+    fuss.appendChild(knopf);
+    fuss.appendChild(meldung);
+    block.appendChild(fuss);
+    return block;
+  }
+
+  function einrichtungLaden() {
+    return holen("/api/einrichtung").then(function (d) {
+      if (d.noetig) { assistentZeigen(d); }
+    }).catch(function () { /* ohne Antwort einfach das normale Dashboard */ });
+  }
+
   /* ----------------------------------------------------------- Update */
 
   function updateLaden() {
@@ -1262,6 +1478,9 @@
   var grussText = "";
 
   function ansichtSetzen(name) {
+    // Jede Navigation beendet den Assistenten — sonst stuenden Assistent und
+    // Raster untereinander, und man saehe zweimal dasselbe Dashboard.
+    assistentSchliessen();
     var zugaenge = name === "einstellungen" && Boolean(zugaengeBereich);
     document.body.classList.toggle("zugaenge", zugaenge);
     zugaengeBereich.hidden = !zugaenge;
@@ -1700,7 +1919,8 @@
     }
     var zeile = document.getElementById("karten-fehlend");
     if (!zeile) { return; }
-    zeile.hidden = fehlt.length === 0;
+    var assi = document.getElementById("assistent");
+    zeile.hidden = fehlt.length === 0 || Boolean(assi && !assi.hidden);
     leeren(zeile);
     if (!fehlt.length) { return; }
     zeile.appendChild(document.createTextNode(
@@ -1963,8 +2183,33 @@
   });
   window.addEventListener("hashchange", ausAdresse);
 
-  alleZahlen().then(ausAdresse, ausAdresse);
+  alleZahlen().then(ausAdresse, ausAdresse).then(einrichtungLaden, einrichtungLaden);
   window.setInterval(alleZahlen, 60000);
+
+  // Ganz am Anfang steht statt des Rasters der Assistent. Die Takte oben
+  // laufen trotzdem weiter — sobald ein Zugang steht, ist die Karte gefuellt,
+  // wenn der Assistent zur Seite geht.
+
+  var assiKnopf = document.getElementById("assistent-oeffnen");
+  if (assiKnopf) {
+    assiKnopf.addEventListener("click", function () {
+      assiKnopf.disabled = true;
+      holen("/api/einrichtung/erneut", "POST").then(function () {
+        return holen("/api/einrichtung");
+      }).then(function (d) {
+        // Zurueck aus den Einstellungen, sonst stuenden beide untereinander.
+        // Die Adresse wird dabei ohne hashchange geleert: Das Ereignis kaeme
+        // erst NACH dem Aufbau und wuerde den Assistenten sofort schliessen.
+        ansichtSetzen("");
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, "", window.location.pathname);
+        }
+        window.scrollTo(0, 0);
+        assistentZeigen(d);
+      }).catch(function () { /* nichts zu tun */ })
+        .then(function () { assiKnopf.disabled = false; });
+    });
+  }
 
   // Nachrichten haeufiger nachsehen als die Karten: Sie kommen aus der eigenen
   // Datenbank, kosten also nichts, und ein Zuruf soll nicht bis zum naechsten

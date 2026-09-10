@@ -12,7 +12,13 @@ Veröffentlichen wird daraus eine Nummer nach Haupt.Neben.Korrektur — die
 Nummer wächst also nur, wenn ein Stand bewusst freigegeben wird, nicht bei
 jedem einzelnen Arbeitsschritt.
 
-*Zurzeit nichts.*
+- **Erstinstallations-Assistent.** Ein frisch aufgesetztes Dashboard zeigt
+  jetzt statt des leeren Rasters eine Führung: erst Name, Rolle, Firma und
+  Ansprechpartner, danach Karte für Karte die Zugänge — jede mit „Speichern
+  und prüfen", jede überspringbar. Wer fertig ist, drückt einmal auf „Fertig";
+  wer später etwas nachtragen will, öffnet ihn unter **Settings → Wartung**
+  wieder. Der Assistent verschwindet von selbst, sobald eine Person und eine
+  eingerichtete Karte da sind.
 
 ## 1.2.1 — 10.09.2026
 
