@@ -12,6 +12,18 @@ Veröffentlichen wird daraus eine Nummer nach Haupt.Neben.Korrektur — die
 Nummer wächst also nur, wenn ein Stand bewusst freigegeben wird, nicht bei
 jedem einzelnen Arbeitsschritt.
 
+*Zurzeit nichts.*
+
+## 1.2.0 — 10.09.2026
+
+Diese Fassung macht das Dashboard auf einem fremden Server installierbar.
+
+> **Beim Aktualisieren einer bestehenden Instanz beachten:** Die vier
+> Zulieferungen von außen kommen jetzt aus der `.env`. Wer sie nutzt, trägt
+> dort `BANK_ORDNER_HOST`, `WIDERRUF_ORDNER_HOST`, `WATCHDOG_ORDNER_HOST` und
+> `GOOGLE_ORDNER_HOST` ein — **sonst hängt still ein leerer Ordner drin** und
+> die betroffenen Karten melden sich als „nicht eingerichtet".
+
 - Das Repo ist **öffentlich**. Der Server liest die Updates seither über
   HTTPS statt über einen Bereitstellungsschlüssel — nichts zu verwalten,
   nichts zu widerrufen. `update-einrichten.sh` erkennt das selbst und legt
