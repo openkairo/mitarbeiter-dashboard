@@ -192,6 +192,16 @@ if [[ -z "$GESUND" ]]; then
     exit 1
 fi
 
+# Ein Update heilt keine kaputte .env — aber es ist die einzige Gelegenheit,
+# bei der auf jeder Instanz regelmaessig etwas laeuft. Instanzen, die vor dem
+# 11.09.2026 mit install.sh angelegt wurden, tragen einen Hash, in dem die
+# Prozess-ID des Installationslaufs steht statt der Dollarzeichen; anmelden
+# kann sich dort niemand, obwohl alles gruen aussieht. Nur melden, nicht
+# abbrechen: Der neue Stand laeuft, das ist eine getrennte Baustelle.
+if ! (INSTANZ="$INSTANZ" ORDNER="$ORDNER" "$ORDNER/zugang-anlegen.sh" --pruefen >/tmp/smg-zugang-pruef.log 2>&1); then
+    melden laeuft "Hinweis: $(grep -c '^  ✗' /tmp/smg-zugang-pruef.log) Zugang/Zugänge in der .env sind unbrauchbar — siehe zugang-anlegen.sh --pruefen"
+fi
+
 # Alte Sicherungen ausduennen: die letzten fuenf bleiben. Das sind eigene
 # Kopien, keine Daten der Instanz.
 ls -1dt "$SICHERUNGEN"/*/ 2>/dev/null | tail -n +$((BEHALTEN + 1)) | xargs -r rm -rf

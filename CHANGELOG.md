@@ -12,6 +12,24 @@ Veröffentlichen wird daraus eine Nummer nach Haupt.Neben.Korrektur — die
 Nummer wächst also nur, wenn ein Stand bewusst freigegeben wird, nicht bei
 jedem einzelnen Arbeitsschritt.
 
+- **`install.sh` schrieb einen Hash, mit dem sich niemand anmelden konnte.**
+  Beim Verdoppeln der Dollarzeichen für die `.env` stand `$$` unmaskiert im
+  Ersetzungstext — Bash setzt dort die Prozess-ID ein. Statt `$apr1$…` landete
+  also die PID des Installationslaufs an den drei entscheidenden Stellen.
+  Besonders ärgerlich war das stille Scheitern: Der Container lief, `/healthz`
+  meldete grün, die Installation nannte ein Passwort, das nie gepasst hat.
+  Dagegen jetzt vier Dinge:
+  - Die Ersetzung ist maskiert, wie in `deploy/zugang-anlegen.sh` schon länger.
+  - `install.sh` **probiert die Anmeldung am Ende wirklich aus** und bricht ab,
+    statt Erfolg zu melden. `/healthz` läuft an der Anmeldung vorbei und taugt
+    dafür nicht.
+  - `deploy/zugang-anlegen.sh --pruefen` sagt zu einer **bestehenden** `.env`,
+    ob ihre Hashes brauchbar sind. Der Fix heilt keine schon geschriebene
+    Datei; wer vorher installiert hat, repariert sie mit
+    `zugang-anlegen.sh <name>`. Ein Update meldet den Zustand von selbst.
+  - Neu: `deploy/pruef-dollar.sh` — prüft die Falle im ganzen Repo und weist
+    dabei zuerst nach, dass die alte Schreibweise den Fehler wirklich erzeugt.
+
 - **Erstinstallations-Assistent.** Ein frisch aufgesetztes Dashboard zeigt
   jetzt statt des leeren Rasters eine Führung: erst Name, Rolle, Firma und
   Ansprechpartner, danach Karte für Karte die Zugänge — jede mit „Speichern

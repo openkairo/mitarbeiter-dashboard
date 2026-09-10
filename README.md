@@ -73,6 +73,10 @@ Weitere Skripte:
 
 - `deploy/zugang-anlegen.sh <name>` legt auf dem Server einen Basic-Auth-Zugang
   an und probiert die Anmeldung anschließend wirklich aus.
+  `--pruefen` sagt zu einer bestehenden `.env`, ob ihre Hashes überhaupt
+  brauchbar sind — ein kaputter Hash fällt sonst erst auf, wenn sich jemand
+  nicht anmelden kann, denn der Container läuft trotzdem und `/healthz`
+  meldet grün.
 - `deploy/domain-aktivieren.sh <host>` hängt einen Hostnamen an die
   Traefik-Regel — aber erst, wenn mehrere öffentliche Resolver **und** der
   Server selbst die richtige IP liefern. Ein Name, der noch woandershin zeigt,

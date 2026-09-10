@@ -137,11 +137,28 @@ mkdir -p "$ORDNER"
 rsync -a --exclude '.git' --exclude '.env' --exclude 'data/' --exclude '__pycache__' \
       "$QUELLE/" "$ORDNER/"
 mkdir -p "$ORDNER/data"
+# Dasselbe Skript, derselbe Platz wie nach einem Deploy oder Update — sonst
+# stimmt jeder Hinweis "ruf zugang-anlegen.sh auf" nur bei einem Teil der
+# Instanzen.
+install -m 755 "$QUELLE/deploy/zugang-anlegen.sh" "$ORDNER/zugang-anlegen.sh"
 
 [[ -n "$PASSWORT" ]] || PASSWORT="$(openssl rand -base64 12)"
 HASH="$(openssl passwd -apr1 "$PASSWORT")"
 # Compose frisst einzelne "$" — im .env muss jedes verdoppelt sein.
-HASH_ENV="${HASH//$/$$}"
+# Beide Dollarzeichen muessen maskiert sein: unmaskiert ist "$$" im
+# Ersetzungstext die Prozess-ID, und dann steht die PID im Hash statt eines
+# Dollarzeichens. Das faellt nirgends auf, weil der Container trotzdem laeuft
+# und /healthz gruen meldet — nur anmelden kann sich niemand mehr.
+# Gleiche Stelle, gleiche Schreibweise wie in deploy/zugang-anlegen.sh.
+HASH_ENV="${HASH//\$/\$\$}"
+
+# Lieber hier abbrechen als eine Installation abliefern, deren Passwort nie
+# gepasst hat. Ohne "$$" ist die Verdoppelung schiefgegangen.
+if [[ "$HASH_ENV" != *'$$'* ]]; then
+    echo "✗ Der Passwort-Hash liess sich nicht fuer die .env vorbereiten." >&2
+    echo "  Erwartet wurden verdoppelte Dollarzeichen. Bitte melden." >&2
+    exit 1
+fi
 
 install -m 600 /dev/null "$ORDNER/.env"
 cat > "$ORDNER/.env" <<ENDE
@@ -166,6 +183,25 @@ echo "▸ 6/6  Bauen und starten"
 (cd "$ORDNER" && docker compose up -d --build) 2>&1 | tail -3 | sed 's/^/  /'
 for _ in $(seq 1 20); do
     if curl -fsS --max-time 8 "https://$HOST/healthz" 2>/dev/null | grep -q '"status":"ok"'; then
+        # /healthz laeuft an der Anmeldung vorbei, damit die Ueberwachung ohne
+        # Passwort nachsehen kann. Deshalb sagt "gruen" hier noch nichts
+        # darueber, ob sich jemand anmelden kann — das muss eigens probiert
+        # werden, sonst meldet die Installation Erfolg fuer ein Dashboard,
+        # das niemand betreten kann.
+        anmeldung=""
+        for _ in $(seq 1 5); do
+            anmeldung="$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 \
+                         -u "$BENUTZER:$PASSWORT" "https://$HOST/" || true)"
+            [[ "$anmeldung" == "200" ]] && break
+            sleep 2
+        done
+        if [[ "$anmeldung" != "200" ]]; then
+            echo
+            echo "✗ Das Dashboard laeuft, aber die Anmeldung schlaegt fehl (HTTP $anmeldung)." >&2
+            echo "  Das Passwort in $ORDNER/.env passt nicht zu dem, was hier steht." >&2
+            echo "  Reparieren:  INSTANZ=$INSTANZ $ORDNER/zugang-anlegen.sh $BENUTZER" >&2
+            exit 1
+        fi
         echo
         echo "Fertig. Dashboard: https://$HOST"
         echo "  Anmeldung: $BENUTZER / $PASSWORT"

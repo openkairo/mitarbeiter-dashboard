@@ -7,6 +7,8 @@
 #   ./zugang-anlegen.sh team 'geheim'            → als Argument; steht dann in
 #                                                   Prozessliste und History
 #   ./zugang-anlegen.sh --liste         → zeigt, welche Benutzer es gibt
+#   ./zugang-anlegen.sh --pruefen       → dasselbe, meldet aber kaputte
+#                                         Hashes mit Rueckgabewert 1
 #
 # Nimmt drei Fallen ab:
 #   1. Docker Compose frisst einzelne "$" — der Hash wird verdoppelt abgelegt.
@@ -31,20 +33,59 @@ if [[ ! -f "$ENV_DATEI" ]]; then
     exit 1
 fi
 
+# Sagt zu einem Hash aus der .env, ob Traefik damit etwas anfangen kann.
+# Jeder crypt-Hash enthaelt Dollarzeichen ($apr1$…, $2y$…); in der .env muss
+# jedes davon verdoppelt sein. Daran lassen sich beide bekannten Schaeden
+# unterscheiden, ohne das Passwort zu kennen.
+hash_befund() {
+    local hash="$1"
+    if [[ "$hash" != *'$'* ]]; then
+        # Kein einziges Dollarzeichen: So sieht der Schaden aus, den
+        # install.sh bis 11.09.2026 angerichtet hat — statt der Dollarzeichen
+        # steht die Prozess-ID des Installationslaufs im Hash.
+        echo "kaputt: keine Dollarzeichen im Hash — Passwort passt nicht"
+        return 1
+    fi
+    # Verdoppelte wegnehmen; bleibt ein einzelnes uebrig, frisst Compose es.
+    local rest="${hash//\$\$/}"
+    if [[ "$rest" == *'$'* ]]; then
+        echo "kaputt: Dollarzeichen nicht verdoppelt — Compose verschluckt sie"
+        return 1
+    fi
+    return 0
+}
+
 benutzer_liste() {
-    local zeile
+    local zeile schaden=0
     zeile="$(grep '^BASIC_AUTH_USERS=' "$ENV_DATEI" | head -1 || true)"
     zeile="${zeile#BASIC_AUTH_USERS=}"
     local IFS=','
     for eintrag in $zeile; do
-        [[ -n "$eintrag" ]] && echo "  · ${eintrag%%:*}"
+        [[ -n "$eintrag" ]] || continue
+        local befund
+        if befund="$(hash_befund "${eintrag#*:}")"; then
+            echo "  · ${eintrag%%:*}"
+        else
+            echo "  ✗ ${eintrag%%:*} — $befund"
+            schaden=1
+        fi
     done
+    return "$schaden"
 }
 
-if [[ "${1:-}" == "--liste" ]]; then
+if [[ "${1:-}" == "--liste" || "${1:-}" == "--pruefen" ]]; then
     echo "Zugänge für $ADRESSE:"
-    benutzer_liste
-    exit 0
+    if benutzer_liste; then
+        exit 0
+    fi
+    # Der Fix in install.sh heilt eine schon geschriebene .env nicht — hier
+    # steht deshalb, was zu tun ist, statt nur "kaputt".
+    echo
+    echo "✗ Mindestens ein Eintrag taugt nicht. Anmelden kann sich damit niemand," >&2
+    echo "  obwohl der Container laeuft und /healthz gruen meldet." >&2
+    echo "  Reparieren, je Benutzer einmal:  $0 <name>" >&2
+    echo "  Das setzt ein neues Passwort und probiert die Anmeldung danach aus." >&2
+    exit 1
 fi
 
 BENUTZER="${1:-}"
