@@ -1101,3 +1101,58 @@ body.leiste-zu .nav-neu { margin-left: 0; position: absolute; top: 8px; right: 8
 
 .assi-ende { text-align: center; }
 .assi-ende .assi-hinweis { margin: .8rem 0 0; }
+
+/* ------------------------------------------------ Anmeldung bei Google */
+
+/* Steht über den Kalender-Feldern: Dieser Zugang wird angeklickt, nicht
+   abgetippt — er soll deshalb vor den Textfeldern stehen, nicht zwischen
+   ihnen. */
+.g-anmeldung {
+  border: 1px solid var(--rand);
+  border-radius: 9px;
+  background: var(--karte-still);
+  padding: .7rem .8rem;
+  margin-bottom: 1rem;
+}
+
+.g-zeile { line-height: 2.1; }
+.g-zeile .knopf-haupt,
+.g-zeile .e-pruefen { margin-right: .6rem; }
+
+.g-stand { font-weight: 600; margin-right: .6rem; }
+.g-stand.gut { color: var(--gruen); }
+
+.g-anmeldung .e-hilfe { margin-top: .5rem; }
+
+.g-anleitung { margin-top: .7rem; }
+.g-anleitung > summary {
+  cursor: pointer;
+  color: var(--akzent);
+  font-size: .85rem;
+}
+.g-anleitung ol {
+  margin: .6rem 0 .4rem;
+  padding-left: 1.2rem;
+  color: var(--text-leise);
+  font-size: .84rem;
+  line-height: 1.5;
+}
+
+.g-rueckweg {
+  background: var(--karte);
+  border: 1px solid var(--rand);
+  border-radius: 7px;
+  padding: .4rem .5rem;
+}
+.g-rueckweg code {
+  font-size: .8rem;
+  word-break: break-all;
+  margin-right: .5rem;
+}
+
+/* Sortierknopf: Weicht eine Karte von der Vorgabe ab, muss man das sehen —
+   sonst sucht man spaeter, warum sie anders aussieht als die anderen. */
+.karte-knoepfe .sortieren.aktiv {
+  color: var(--akzent);
+  font-weight: 700;
+}

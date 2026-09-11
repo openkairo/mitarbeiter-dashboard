@@ -97,7 +97,20 @@ FELDER = [
      "gehört ins Feld darüber, nicht hierher.", None, True),
 
     ("KALENDER_ID", "Kalender", "Kalender", False,
-     "Kennung des Google-Kalenders, meist die Adresse des Kontos."),
+     "Kennung des Google-Kalenders, meist die Adresse des Kontos. Nach der "
+     "Anmeldung oben kannst du ihn stattdessen aus einer Liste wählen."),
+    # Der zweite Weg zum Kalender: die normale Google-Anmeldung statt einer
+    # Schluesseldatei auf dem Server. Alles optional — wer ein Dienstkonto
+    # gemountet hat, soll hier nicht rot angemahnt werden.
+    ("GOOGLE_CLIENT_ID", "Client-ID", "Kalender", False,
+     "Aus der Google-Konsole, OAuth-Client vom Typ „Webanwendung“. Eine "
+     "Client-ID ist kein Geheimnis — sie steht offen, damit du sie mit der "
+     "Konsole vergleichen kannst.", None, True),
+    ("GOOGLE_CLIENT_SECRET", "Client-Geheimnis", "Kalender", True,
+     "Steht neben der Client-ID in der Google-Konsole.", None, True),
+    ("GOOGLE_REFRESH_TOKEN", "Anmeldung", "Kalender", True,
+     "Setzt der Knopf „Mit Google anmelden“ von selbst. Von Hand nur nötig, "
+     "wenn du die Anmeldung woanders erzeugt hast.", None, True),
 
     ("CLOCKIN_TOKEN", "API-Token", "clockin", True,
      "Für die Zeitzeile im Kopf. Ohne ihn fällt nur diese Zeile weg."),

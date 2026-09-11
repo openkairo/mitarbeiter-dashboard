@@ -107,6 +107,10 @@ def fetch(env: dict) -> dict:
         # Fuer die Erkennung im Tagesfortschritt zaehlt die VOLLE Liste: Eine
         # Rechnung, die aus den zwanzig angezeigten rutscht, ist nicht bezahlt.
         "bestand": bestand_aus(liste),
+        # Wie viele es insgesamt waeren. Die Oberflaeche braucht das,
+        # um beim Umsortieren ehrlich zu bleiben: „aelteste zuerst" kann
+        # hier nur die aeltesten der angezeigten meinen.
+        "gekuerzt": len(liste) if len(liste) > ANZEIGE else 0,
         "fenster_tage": FENSTER_TAGE,
         "diff_sperre": (f"Belegliste am Seitenlimit ({MAX_SEITEN}) abgeschnitten"
                         if abgeschnitten else None),

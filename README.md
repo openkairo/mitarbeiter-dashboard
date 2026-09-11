@@ -31,10 +31,14 @@ Zugang hinterlegt hat, behauptet Feierabend, wo gar nicht nachgesehen wurde.
 | Offene Bestellungen | WooCommerce: Adresse, Key, Secret |
 | Widerrufe + Rückstand | Dateien in gemounteten Ordnern, WooCommerce für die Details |
 | Aufgaben | Todomaster: MCP-Adresse, Token, Kategorien |
-| Heute im Kalender | Google-Kalender-Kennung + Dienstkonto-Schlüssel |
+| Heute im Kalender | Google-Kalender-Kennung, dazu eine Google-Anmeldung **oder** ein Dienstkonto-Schlüssel |
 | Superchat | API-Schlüssel + eine oder mehrere Postfach-Kennungen |
 | Posteingang | mindestens ein Postfach (Anbieter-API oder IMAP), in der Oberfläche angelegt |
 | FAQ-Nachschlag | MCP-Adresse der eigenen Wissensbasis |
+
+Die Einträge einer Karte ordnen sich nach Dringlichkeit. Der Knopf `↕` im
+Kartenkopf schaltet auf **neueste zuerst** (`⇣`) oder **älteste zuerst** (`⇡`)
+um — je Karte einzeln und pro Gerät gemerkt.
 
 Geheimnisse gehen nie an den Browser zurück, nur ihre letzten vier Zeichen.
 

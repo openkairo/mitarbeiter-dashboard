@@ -315,7 +315,7 @@ def _karte(name: str) -> dict:
         "posten": posten_liste,
         "extra": {k: v for k, v in daten.items()
                   if k in ("person", "zeit", "teamchat", "stand_datei",
-                           "postfaecher", "postfach_farben")},
+                           "postfaecher", "postfach_farben", "gekuerzt")},
     }
 
 
@@ -667,6 +667,215 @@ def api_superchat_postfaecher():
         return JSONResponse({"fehler": str(fehler)[:200]}, status_code=409)
 
 
+# ------------------------------------------------- Anmeldung bei Google
+
+# Der zweite Weg zum Kalender: sich normal bei Google anmelden, statt eine
+# Dienstkonto-Datei auf den Server zu legen. Was das Dashboard dabei behaelt,
+# ist ein Auffrisch-Token — ein Wert, kein Dateimount, und damit etwas, das
+# der Einrichtungsassistent selbst besorgen kann.
+#
+# Absichtlich ohne fremde Bibliothek: Der Tausch von Code gegen Token ist ein
+# einziger POST. `google-auth` liegt ohnehin im Abbild und erneuert danach von
+# selbst; `google-auth-oauthlib` waere eine Abhaengigkeit fuer eine Handvoll
+# Zeilen.
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+# Wie lange ein begonnener Anmeldevorgang gilt. Kurz, weil er nur die paar
+# Sekunden ueberdauern muss, die Googles Zustimmungsseite braucht.
+STATE_GUELTIG_SEK = 600
+
+
+def _google_rueckweg(request: Request) -> str:
+    """Die Adresse, die in der Google-Konsole eingetragen sein muss.
+
+    Aus der laufenden Anfrage gebildet, nicht aus der Konfiguration: Dann
+    stimmt sie auch bei einer zweiten Instanz oder unter einem neuen Namen,
+    ohne dass jemand daran denken muss.
+    """
+    return str(request.base_url).rstrip("/") + "/oauth/google/zurueck"
+
+
+@app.get("/api/google/anmeldung")
+def api_google_stand(request: Request):
+    from .quellen import kalender as kalender_quelle
+    umg = einstellungen.umgebung()
+    steht = kalender_quelle.angemeldet(umg)
+    # Wer angemeldet ist, aendert sich nicht von selbst — deshalb einmal bei
+    # Google nachfragen und den Namen merken. Ohne das ginge waehrend des
+    # Wartens auf die Zustimmung alle drei Sekunden ein Aufruf hinaus.
+    wer = db.kv_lesen("google_konto", "") if steht else ""
+    fehler = ""
+    if steht and not wer:
+        try:
+            wer = kalender_quelle.konto(umg)
+            if wer:
+                db.kv_schreiben("google_konto", wer)
+        except Exception as f:                                    # noqa: BLE001
+            fehler = kalender_quelle._lesbar(f)
+    return {
+        "angemeldet": steht,
+        "konto": wer,
+        "fehler": fehler,
+        "client_da": bool((umg.get("GOOGLE_CLIENT_ID") or "").strip()
+                          and (umg.get("GOOGLE_CLIENT_SECRET") or "").strip()),
+        "rueckweg": _google_rueckweg(request),
+        # Damit die Oberflaeche sagen kann, dass die Karte auch ohne Anmeldung
+        # laeuft — sonst wirkt ein Dienstkonto wie ein Fehler.
+        "dienstkonto": bool(kalender_quelle._schluesseldatei(umg)),
+    }
+
+
+@app.post("/api/google/anmeldung")
+def api_google_start(request: Request):
+    import secrets
+    from urllib.parse import urlencode
+    from .quellen import kalender as kalender_quelle
+
+    umg = einstellungen.umgebung()
+    client = (umg.get("GOOGLE_CLIENT_ID") or "").strip()
+    if not client or not (umg.get("GOOGLE_CLIENT_SECRET") or "").strip():
+        return JSONResponse(
+            {"fehler": "Erst Client-ID und Client-Geheimnis eintragen und speichern."},
+            status_code=409)
+    state = secrets.token_urlsafe(32)
+    db.kv_schreiben("google_state", f"{state}|{datetime.now().isoformat(timespec='seconds')}")
+    frage = urlencode({
+        "client_id": client,
+        "redirect_uri": _google_rueckweg(request),
+        "response_type": "code",
+        "scope": kalender_quelle.SCOPE,
+        # Der state kommt unveraendert zurueck und ist der einzige Beleg, dass
+        # die Rueckmeldung zu einem Vorgang dieses Dashboards gehoert.
+        "state": state,
+        # offline + consent: Nur so kommt ueberhaupt ein Auffrisch-Token
+        # zurueck. Ohne "consent" laesst Google es beim zweiten Mal weg, und
+        # dann steht man mit einem Zugang da, der in einer Stunde endet.
+        "access_type": "offline",
+        "prompt": "consent",
+        "include_granted_scopes": "true",
+    })
+    log.info("Google-Anmeldung begonnen von %s", benutzer(request))
+    return {"adresse": f"{GOOGLE_AUTH_URL}?{frage}"}
+
+
+@app.post("/api/google/abmelden")
+def api_google_abmelden(request: Request):
+    einstellungen.setzen({}, benutzer(request), ["GOOGLE_REFRESH_TOKEN"])
+    db.kv_schreiben("google_state", "")
+    db.kv_schreiben("google_konto", "")
+    cache.sofort("kalender")
+    log.info("Google-Anmeldung geloest von %s", benutzer(request))
+    return {"angemeldet": False}
+
+
+@app.get("/api/google/kalender")
+def api_google_kalender():
+    """Die Kalender zur Auswahl — dasselbe Muster wie bei den Postfaechern."""
+    from .quellen import kalender as kalender_quelle
+    try:
+        return {"kalender": kalender_quelle.kalenderliste(einstellungen.umgebung())}
+    except Exception as fehler:                                   # noqa: BLE001
+        return JSONResponse({"fehler": kalender_quelle._lesbar(fehler)},
+                            status_code=409)
+
+
+def _google_seite(titel: str, text: str, gut: bool) -> HTMLResponse:
+    """Die Seite, auf der Google den Browser abliefert.
+
+    Bewusst eine eigene, winzige Seite statt einer Weiterleitung ins
+    Dashboard: Der Vorgang laeuft in einem zweiten Tab, und der soll sich
+    schliessen lassen, ohne dass man den ersten verliert.
+    """
+    farbe = "#1f9d61" if gut else "#dc3b3b"
+    return HTMLResponse(
+        "<!doctype html><meta charset=utf-8>"
+        f"<title>{titel}</title>"
+        "<style>body{font:16px/1.5 system-ui,sans-serif;margin:3rem auto;max-width:34rem;"
+        "padding:0 1rem;color:#16202b}h1{font-size:1.3rem}"
+        f"h1{{color:{farbe}}}</style>"
+        f"<h1>{titel}</h1><p>{text}</p>"
+        "<p><button onclick=\"window.close()\">Fenster schließen</button></p>",
+        status_code=200 if gut else 400)
+
+
+@app.get("/oauth/google/zurueck", response_class=HTMLResponse)
+def oauth_google_zurueck(request: Request):
+    import json as _json
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+    from .quellen import kalender as kalender_quelle
+
+    fehler = request.query_params.get("error")
+    if fehler:
+        return _google_seite("Nicht angemeldet",
+                             f"Google hat abgelehnt: {fehler}. Du kannst das "
+                             "Fenster schließen und es erneut versuchen.", False)
+
+    code = request.query_params.get("code") or ""
+    state = request.query_params.get("state") or ""
+    gemerkt = db.kv_lesen("google_state", "")
+    # Der state ist einmalig und wird sofort verbraucht — ein zweiter Aufruf
+    # mit demselben Wert darf nichts mehr bewirken.
+    db.kv_schreiben("google_state", "")
+    if not code or not state or "|" not in gemerkt or state != gemerkt.split("|", 1)[0]:
+        return _google_seite("Abgelehnt",
+                             "Diese Rückmeldung gehört zu keinem Anmeldevorgang "
+                             "dieses Dashboards. Bitte in den Einstellungen neu "
+                             "beginnen.", False)
+    try:
+        begonnen = datetime.fromisoformat(gemerkt.split("|", 1)[1])
+    except ValueError:
+        begonnen = datetime.now()
+    if (datetime.now() - begonnen).total_seconds() > STATE_GUELTIG_SEK:
+        return _google_seite("Zu spät",
+                             "Der Anmeldevorgang ist älter als zehn Minuten. "
+                             "Bitte in den Einstellungen neu beginnen.", False)
+
+    umg = einstellungen.umgebung()
+    rumpf = urllib.parse.urlencode({
+        "code": code,
+        "client_id": (umg.get("GOOGLE_CLIENT_ID") or "").strip(),
+        "client_secret": (umg.get("GOOGLE_CLIENT_SECRET") or "").strip(),
+        "redirect_uri": _google_rueckweg(request),
+        "grant_type": "authorization_code",
+    }).encode()
+    anfrage = urllib.request.Request(
+        kalender_quelle.TOKEN_URL, data=rumpf,
+        headers={"Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with urllib.request.urlopen(anfrage, timeout=20) as antwort:
+            daten = _json.loads(antwort.read().decode("utf-8"))
+    except urllib.error.HTTPError as f:
+        roh = f.read().decode("utf-8", "replace")[:300]
+        log.warning("Google-Tausch fehlgeschlagen: %s", roh)
+        return _google_seite("Fehlgeschlagen", kalender_quelle._lesbar(
+            Exception(roh)), False)
+    except Exception as f:                                        # noqa: BLE001
+        return _google_seite("Fehlgeschlagen", kalender_quelle._lesbar(f), False)
+
+    token = (daten.get("refresh_token") or "").strip()
+    if not token:
+        # Kommt vor, wenn dieselbe Zustimmung schon einmal erteilt wurde und
+        # Google sie stillschweigend wiederverwendet. Der Zugang waere dann
+        # nach einer Stunde tot — deshalb hier abbrechen statt speichern.
+        return _google_seite(
+            "Kein dauerhafter Zugang",
+            "Google hat keine dauerhafte Anmeldung mitgeschickt. Entziehe dem "
+            "Dashboard den Zugriff unter myaccount.google.com/permissions und "
+            "melde dich danach neu an.", False)
+
+    einstellungen.setzen({"GOOGLE_REFRESH_TOKEN": token}, benutzer(request))
+    # Der gemerkte Name gehoert zur alten Anmeldung — sonst stuende nach einem
+    # Kontowechsel der falsche Name da.
+    db.kv_schreiben("google_konto", "")
+    cache.sofort("kalender")
+    log.info("Google-Anmeldung abgeschlossen von %s", benutzer(request))
+    return _google_seite("Angemeldet",
+                         "Das Dashboard darf deinen Kalender jetzt lesen. Du "
+                         "kannst dieses Fenster schließen — die Einstellungen "
+                         "im anderen Tab holen den Stand von selbst nach.", True)
+
+
 # ------------------------------------------------------------------- Update
 
 # Die Anforderung ist eine Datei im eigenen Datenordner, keine Docker-Aktion.
@@ -718,8 +927,11 @@ def _aenderungen_hier() -> list:
         if not drin or not zeile.strip():
             continue
         zeile = zeile.strip()
-        if zeile[:1] in "-*":
-            raus.append(zeile[1:].strip())
+        # Ein Aufzaehlungszeichen ist "-" oder "*" MIT Leerzeichen dahinter.
+        # Ohne diese Bedingung faengt eine Folgezeile, die mit **fett**
+        # beginnt, einen neuen Punkt an und zerreisst den Satz.
+        if zeile[:2] in ("- ", "* "):
+            raus.append(zeile[2:].strip())
         elif raus:
             raus[-1] += " " + zeile
     return [z.replace("**", "") for z in raus][:12]

@@ -94,6 +94,45 @@ Für jede weitere Person eine eigene Instanz: eigener Ordner, eigene `.env`,
 eigene Datenbank, eigener Hostname. Derselbe Code, `install.sh` noch einmal mit
 anderem `--host` und `--instanz`.
 
+## Google-Kalender anbinden
+
+Zwei Wege, beide funktionieren. **Der kürzere ist die Anmeldung** — sie braucht
+keine Datei auf dem Server und keinen Neustart.
+
+### Anmelden (empfohlen)
+
+Einmal in der [Google-Konsole](https://console.cloud.google.com):
+
+1. Projekt wählen oder anlegen.
+2. Unter *APIs & Dienste* die **Google-Calendar-API** aktivieren. Fehlt sie,
+   kommt später `accessNotConfigured` — das sieht wie ein Rechteproblem aus,
+   ist aber keines.
+3. Zustimmungsbildschirm einrichten und auf **„In Produktion"** stellen.
+4. *Anmeldedaten → OAuth-Client-ID → Webanwendung*. Als autorisierte
+   Weiterleitungs-URI genau das eintragen, was das Dashboard unter
+   *Settings → Kalender* anzeigt — `https://<dein-host>/oauth/google/zurueck`.
+   Jede Instanz braucht eine eigene Zeile.
+5. Client-ID und Geheimnis unter *Settings → Kalender* eintragen, speichern,
+   dann **„Mit Google anmelden"** drücken und zustimmen.
+
+Danach lässt sich der Kalender aus einer Liste wählen, statt seine Adresse
+abzutippen.
+
+> **Der Zustimmungsbildschirm muss auf „In Produktion" stehen.** Bleibt er auf
+> „Test", widerruft Google die Anmeldung **nach 7 Tagen** — die Karte wäre dann
+> wöchentlich tot. Ohne Google-Prüfung erscheint beim Anmelden einmal die
+> Warnung „nicht bestätigte App"; über *Erweitert* geht es weiter. Das ist
+> zulässig, bis 100 Personen die App benutzen.
+
+Wer sich abmeldet, verliert nur den Zugang — Haken, Notizen und Nachrichten
+bleiben, und ein hinterlegtes Dienstkonto übernimmt wieder.
+
+### Dienstkonto (der ältere Weg)
+
+Schlüsseldatei als Ordner mounten (`GOOGLE_ORDNER_HOST`, siehe unten) und den
+Kalender in den Kalendereinstellungen für die Adresse des Dienstkontos
+freigeben. Liegt beides vor, gilt die Anmeldung.
+
 ## Zulieferungen von außen (optional)
 
 Bank-Abgleich, Widerruf-Wache, Watchdog und der Google-Schlüssel kommen aus

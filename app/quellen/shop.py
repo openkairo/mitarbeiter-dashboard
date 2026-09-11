@@ -75,6 +75,10 @@ def fetch(env: dict) -> dict:
         "posten": liste[:ANZEIGE],
         # Volle Liste fuer die Erkennung — die zwanzig oben sind nur Anzeige.
         "bestand": bestand_aus(liste),
+        # Wie viele es insgesamt waeren. Die Oberflaeche braucht das,
+        # um beim Umsortieren ehrlich zu bleiben: „aelteste zuerst" kann
+        # hier nur die aeltesten der angezeigten meinen.
+        "gekuerzt": len(liste) if len(liste) > ANZEIGE else 0,
         "diff_sperre": (f"Bestellliste bei {GRENZE} abgeschnitten"
                         if len(bestellungen) >= GRENZE else None),
         "kennzahlen": {"Offen": len(liste), "Summe": summe,

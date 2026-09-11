@@ -12,6 +12,59 @@ Veröffentlichen wird daraus eine Nummer nach Haupt.Neben.Korrektur — die
 Nummer wächst also nur, wenn ein Stand bewusst freigegeben wird, nicht bei
 jedem einzelnen Arbeitsschritt.
 
+*Zurzeit nichts.*
+
+## 1.3.0 — 11.09.2026
+
+Der Schwerpunkt liegt auf der **Einrichtung**: Ein Assistent führt durch den
+ersten Aufruf, der Google-Kalender kommt ohne Schlüsseldatei auf dem Server
+aus, und ein Fehler in `install.sh` ist behoben, der jede frische Installation
+unbenutzbar machte — ohne dass irgendwo etwas danach ausgesehen hätte. Dazu
+eine Kleinigkeit fürs Tagesgeschäft: Die Einträge einer Karte lassen sich nach
+Datum sortieren.
+
+**Bestehende Instanzen müssen nichts nachtragen.** Alles Neue ist abschaltbar
+oder greift erst, wenn jemand es einträgt.
+
+- **Die Änderungsliste im Update-Kasten riss Sätze auseinander**, sobald eine
+  Folgezeile mit einem fett gesetzten Wort begann — das Sternchen galt als
+  neuer Aufzählungspunkt. Ein Aufzählungszeichen braucht jetzt ein Leerzeichen
+  dahinter.
+
+- **Einträge lassen sich je Karte nach Datum sortieren.** Ein neuer Knopf im
+  Kartenkopf schaltet zwischen der bisherigen Ordnung (dringendste zuerst),
+  **neueste zuerst** und **älteste zuerst** um. Jede Karte behält ihre eigene
+  Wahl, gemerkt pro Gerät wie Reihenfolge und Ein-/Ausklappen; weicht eine
+  Karte von der Vorgabe ab, ist der Knopf farbig — sonst sucht man später,
+  warum sie anders aussieht.
+  - Abgehaktes bleibt in **beiden** Richtungen am Ende der Liste.
+  - Einträge ohne Datum stehen in beiden Richtungen unten.
+  - Der Posteingang gibt jetzt die **Uhrzeit** zur Sortierung mit. Vorher kannte
+    er nur den Tag, und die Reihenfolge mehrerer Mails desselben Tages war
+    damit zufällig — im Posteingang der Normalfall.
+  - Rechnungen und Bestellungen zeigen nur die 20 neuesten. Stellt man sie auf
+    „älteste zuerst", sagt die Karte das jetzt ausdrücklich: Sortiert wird nur
+    das Angezeigte. Ohne diesen Satz hätte sie behauptet, die älteste offene
+    Rechnung zu zeigen.
+
+- **Der Google-Kalender lässt sich jetzt per normaler Anmeldung anbinden.**
+  Bisher ging es nur über eine Dienstkonto-Datei, die auf dem Server liegen und
+  als Volume eingehängt werden musste — der einzige Zugang im ganzen Dashboard,
+  für den SSH nötig war, und deshalb der einzige, nach dem der
+  Einrichtungsassistent nicht fragen konnte. Neu unter **Settings → Kalender**:
+  Client-ID und Geheimnis eintragen, „Mit Google anmelden" drücken, zustimmen.
+  Die nötige Weiterleitungs-Adresse zeigt das Dashboard selbst an — der
+  häufigste Fehler (`redirect_uri_mismatch`) entsteht durch Abtippen.
+  Danach ist auch der Kalender aus einer Liste wählbar statt abzutippen.
+  - **Das Dienstkonto bleibt.** Wer es nutzt, merkt nichts; liegt beides vor,
+    gilt die Anmeldung. Keine bestehende Instanz ändert sich von selbst.
+  - Die Kalenderkarte erscheint jetzt nur noch, wenn sie auch etwas holen kann.
+    Vorher stand sie da und meldete den fehlenden Zugang erst beim Abruf.
+  - Googles Fehlermeldungen kommen im Klartext: fehlende Calendar-API,
+    falsche Client-Angaben — und vor allem die abgelaufene Anmeldung, die
+    entsteht, wenn der Zustimmungsbildschirm auf „Test" steht. Google
+    widerruft dann **nach 7 Tagen**, ohne dass es irgendwo stünde.
+
 - **`install.sh` schrieb einen Hash, mit dem sich niemand anmelden konnte.**
   Beim Verdoppeln der Dollarzeichen für die `.env` stand `$$` unmaskiert im
   Ersetzungstext — Bash setzt dort die Prozess-ID ein. Statt `$apr1$…` landete

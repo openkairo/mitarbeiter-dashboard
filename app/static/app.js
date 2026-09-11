@@ -24,6 +24,7 @@
   var SCHLUESSEL_THEMA = "smg-buchhaltung-thema";
   var SCHLUESSEL_ORDNUNG = "smg-" + INSTANZ + "-reihenfolge";
   var SCHLUESSEL_ZU = "smg-" + INSTANZ + "-zugeklappt";
+  var SCHLUESSEL_SORTIERUNG = "smg-" + INSTANZ + "-sortierung";
 
   var karten = {};      // name -> {element, daten, erledigteZeigen, zeitgeber}
   var suchtext = "";
@@ -429,6 +430,10 @@
         kopf.appendChild(ergebnis);
         kasten.appendChild(kopf);
 
+        // Der Kalender ist der einzige Zugang, der sich nicht abtippen laesst.
+        // Er wird angeklickt — deshalb steht hier ein Block statt eines Felds.
+        if (gruppe === "Kalender") { googleAnmeldung(kasten); }
+
         var liste = nachGruppe[gruppe];
         for (var j = 0; j < liste.length; j++) {
           var f = liste[j];
@@ -499,6 +504,9 @@
           // Postfach-Kennungen tippt niemand fehlerfrei ab — dafür gibt es
           // eine Auswahl, die die Namen aus Superchat holt.
           if (f.schluessel === "SUPERCHAT_INBOX_ID") { postfachwahl(feld, eingabe); }
+          // Eine Kalenderadresse tippt man einmal falsch und sucht dann lange.
+          // Sobald eine Anmeldung steht, liefert Google die Liste selbst.
+          if (f.schluessel === "KALENDER_ID") { kalenderwahl(feld, eingabe); }
 
           if (f.hilfe) { feld.appendChild(bauen("div", "e-hilfe", f.hilfe)); }
 
@@ -671,6 +679,10 @@
       block.appendChild(hin);
       return block;
     }
+
+    // Der Kalender braucht eine Anmeldung, kein Textfeld — derselbe Block
+    // wie in den Einstellungen, damit man nicht dorthin wechseln muss.
+    if (schritt.karte === "kalender") { googleAnmeldung(block); }
 
     var eingaben = {};
     for (var i = 0; i < schritt.felder.length; i++) {
@@ -987,6 +999,209 @@
         + ") — Kennung von Hand eintragen.";
       zeichnen();
     });
+  }
+
+  /* --------------------------------------------- Anmeldung bei Google */
+
+  /* Zwei Wege fuehren zum Kalender: die normale Anmeldung oder eine
+     Dienstkonto-Datei auf dem Server. Dieser Block zeigt, welcher gerade
+     traegt — sonst sieht man bei einem laufenden Dienstkonto „nicht
+     angemeldet" und haelt eine funktionierende Karte fuer kaputt. */
+
+  function googleAnmeldung(kasten) {
+    var block = bauen("div", "g-anmeldung");
+    kasten.appendChild(block);
+    googleZeichnen(block);
+    return block;
+  }
+
+  function googleZeichnen(block) {
+    leeren(block);
+    block.appendChild(bauen("span", "e-ergebnis", "Stand wird geholt …"));
+    return holen("/api/google/anmeldung").then(function (d) {
+      leeren(block);
+      var zeile = bauen("div", "g-zeile");
+
+      if (d.angemeldet) {
+        zeile.appendChild(bauen("span", "g-stand gut",
+          "✓ Mit Google angemeldet" + (d.konto ? " als " + d.konto : "")));
+        var loesen = bauen("button", "e-pruefen", "Verbindung lösen");
+        loesen.type = "button";
+        loesen.addEventListener("click", function () {
+          if (!window.confirm("Die Google-Anmeldung lösen?\n\n"
+              + (d.dienstkonto
+                 ? "Die Karte fällt danach auf das Dienstkonto zurück."
+                 : "Die Kalenderkarte hat danach keinen Zugang mehr."))) { return; }
+          loesen.disabled = true;
+          holen("/api/google/abmelden", "POST").then(function () {
+            googleZeichnen(block);
+          }).catch(function () { loesen.disabled = false; });
+        });
+        zeile.appendChild(loesen);
+        block.appendChild(zeile);
+        if (d.fehler) {
+          block.appendChild(bauen("p", "e-ergebnis schlecht", "✗ " + d.fehler));
+        }
+        return;
+      }
+
+      var knopf = bauen("button", "knopf-haupt", "Mit Google anmelden");
+      knopf.type = "button";
+      knopf.disabled = !d.client_da;
+      var meldung = bauen("span", "e-ergebnis", "");
+      knopf.addEventListener("click", function () {
+        knopf.disabled = true;
+        meldung.className = "e-ergebnis";
+        meldung.textContent = "Google wird geöffnet …";
+        holen("/api/google/anmeldung", "POST").then(function (a) {
+          window.open(a.adresse, "_blank");
+          meldung.textContent = "Im neuen Fenster zustimmen — hier wird nachgesehen.";
+          // Nachsehen statt fragen: Der Vorgang endet in einem anderen Tab,
+          // von dem diese Seite nichts erfaehrt.
+          var versuche = 0;
+          var takt = window.setInterval(function () {
+            versuche += 1;
+            holen("/api/google/anmeldung").then(function (n) {
+              if (n.angemeldet) {
+                window.clearInterval(takt);
+                googleZeichnen(block).then(kalenderlisteNachladen);
+              } else if (versuche > 60) {
+                window.clearInterval(takt);
+                meldung.className = "e-ergebnis schlecht";
+                meldung.textContent = "Nichts angekommen. Fenster geschlossen?";
+                knopf.disabled = false;
+              }
+            });
+          }, 3000);
+        }).catch(function (f) {
+          meldung.className = "e-ergebnis schlecht";
+          meldung.textContent = "✗ " + f.message;
+          knopf.disabled = false;
+        });
+      });
+      zeile.appendChild(knopf);
+      zeile.appendChild(meldung);
+      block.appendChild(zeile);
+
+      if (d.dienstkonto) {
+        block.appendChild(bauen("p", "e-hilfe",
+          "Die Karte läuft zurzeit über ein Dienstkonto auf dem Server. Eine "
+          + "Anmeldung hier hat Vorrang; ohne sie bleibt alles wie es ist."));
+      }
+
+      // Die Adresse, die in der Google-Konsole stehen muss. Sie zu zeigen
+      // spart den haeufigsten Fehler: redirect_uri_mismatch.
+      var anleitung = document.createElement("details");
+      anleitung.className = "g-anleitung";
+      var titel = document.createElement("summary");
+      titel.textContent = d.client_da
+        ? "Wo die Weiterleitungs-Adresse hin muss"
+        : "Was du einmal in der Google-Konsole tun musst";
+      anleitung.appendChild(titel);
+      var schritte = document.createElement("ol");
+      var texte = [
+        "console.cloud.google.com öffnen, ein Projekt wählen oder anlegen.",
+        "Unter „APIs & Dienste“ die Google-Calendar-API aktivieren.",
+        "Zustimmungsbildschirm einrichten und auf „In Produktion“ setzen — "
+          + "bleibt er auf „Test“, verfällt die Anmeldung nach 7 Tagen.",
+        "OAuth-Client vom Typ „Webanwendung“ anlegen und unten diese Adresse "
+          + "als autorisierte Weiterleitungs-URI eintragen:",
+        "Client-ID und Geheimnis in die Felder darunter eintragen und speichern."
+      ];
+      for (var s = 0; s < texte.length; s++) {
+        schritte.appendChild(bauen("li", "", texte[s]));
+      }
+      anleitung.appendChild(schritte);
+      var adresse = bauen("div", "g-rueckweg");
+      adresse.appendChild(bauen("code", "", d.rueckweg));
+      var kopieren = bauen("button", "e-pruefen", "kopieren");
+      kopieren.type = "button";
+      kopieren.addEventListener("click", function () {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(d.rueckweg).then(function () {
+            kopieren.textContent = "kopiert";
+          });
+        }
+      });
+      adresse.appendChild(kopieren);
+      anleitung.appendChild(adresse);
+      block.appendChild(anleitung);
+    }).catch(function (f) {
+      leeren(block);
+      block.appendChild(bauen("p", "e-ergebnis schlecht", "✗ " + f.message));
+    });
+  }
+
+  /* Die Auswahl der Kalender haengt an der Anmeldung: Ein Dienstkonto sieht
+     in seiner Liste meist gar nichts, deshalb bleibt dort das Textfeld. */
+
+  var kalenderNachladen = null;
+
+  function kalenderlisteNachladen() {
+    if (kalenderNachladen) { kalenderNachladen(); }
+  }
+
+  function kalenderwahl(feld, eingabe) {
+    var zeile = bauen("div", "pfwahl");
+    var wahl = document.createElement("select");
+    var meldung = bauen("span", "e-ergebnis", "");
+    var umschalter = bauen("button", "pfwahl-hand", "von Hand eintragen");
+    umschalter.type = "button";
+
+    function zeichnen(liste) {
+      leeren(wahl);
+      var kopf = document.createElement("option");
+      kopf.value = "";
+      kopf.textContent = "Kalender wählen …";
+      wahl.appendChild(kopf);
+      for (var i = 0; i < liste.length; i++) {
+        var opt = document.createElement("option");
+        opt.value = liste[i].wert;
+        opt.textContent = liste[i].titel;
+        if (liste[i].wert === eingabe.value) { opt.selected = true; }
+        wahl.appendChild(opt);
+      }
+      // Ein leeres, graues Klappfeld sieht nach kaputt aus. Ohne Liste steht
+      // hier gar nichts — dann ist das Textfeld der ganz normale Weg.
+      wahl.style.display = liste.length ? "" : "none";
+    }
+
+    function laden() {
+      meldung.className = "e-ergebnis";
+      meldung.textContent = "Kalender werden geholt …";
+      return holen("/api/google/kalender").then(function (d) {
+        var liste = d.kalender || [];
+        zeichnen(liste);
+        eingabe.style.display = liste.length ? "none" : "";
+        umschalter.style.display = liste.length ? "" : "none";
+        umschalter.textContent = "von Hand eintragen";
+        meldung.textContent = liste.length ? "" : "Keine Kalender gefunden.";
+      }).catch(function () {
+        // Ohne Anmeldung ist das Textfeld der normale Weg, kein Fehlerfall —
+        // deshalb hier kein rotes „✗", sondern schlicht nichts.
+        zeichnen([]);
+        eingabe.style.display = "";
+        umschalter.style.display = "none";
+        meldung.textContent = "";
+      });
+    }
+
+    wahl.addEventListener("change", function () {
+      if (wahl.value) { eingabe.value = wahl.value; }
+    });
+    umschalter.addEventListener("click", function () {
+      var versteckt = eingabe.style.display === "none";
+      eingabe.style.display = versteckt ? "" : "none";
+      umschalter.textContent = versteckt ? "Auswahl benutzen" : "von Hand eintragen";
+      if (versteckt) { eingabe.focus(); }
+    });
+
+    zeile.appendChild(wahl);
+    zeile.appendChild(umschalter);
+    zeile.appendChild(meldung);
+    feld.appendChild(zeile);
+    kalenderNachladen = laden;
+    laden();
   }
 
   /* ------------------------------------------------------- Postfaecher */
@@ -1727,7 +1942,12 @@
     for (var i = 0; i < daten.posten.length; i++) {
       (daten.posten[i].erledigt ? fertige : offene).push(daten.posten[i]);
     }
-    var zeigen = offene.concat(eintrag.erledigteZeigen ? fertige : []);
+    // Getrennt sortieren: Abgehaktes bleibt am Ende, sonst wanderte es je
+    // nach Datum mitten in die offene Liste.
+    var richtung = eintrag.sortierung || "";
+    var zeigen = nachDatum(offene, richtung)
+                 .concat(eintrag.erledigteZeigen ? nachDatum(fertige, richtung) : []);
+    sortierKnopfZeichnen(el, richtung);
     if (!zeigen.length) {
       var leer = bauen("li", "leer");
       // Eine leere Karte MIT Hinweis heisst nicht „alles erledigt“, sondern
@@ -1760,8 +1980,19 @@
       ? "Erledigte ausblenden" : "Erledigte zeigen (" + fertige.length + ")";
 
     var hinweis = el.querySelector(".karte-hinweis");
-    hinweis.textContent = alsText(daten.hinweis);
-    hinweis.hidden = !daten.hinweis;
+    var text = alsText(daten.hinweis);
+    // Rechnungen und Bestellungen schneiden schon auf dem Server auf die
+    // neuesten zwanzig ab. „Aelteste zuerst" kann hier deshalb nur die
+    // aeltesten DIESER zwanzig meinen — das muss dastehen, sonst behauptet
+    // die Karte, die aelteste offene Rechnung zu zeigen.
+    var gekuerzt = (daten.extra && daten.extra.gekuerzt) || 0;
+    if (richtung === "alt" && gekuerzt) {
+      text += (text ? " " : "")
+        + "Sortiert wird nur das Angezeigte — die ältesten von " + gekuerzt
+        + " stehen nicht darunter.";
+    }
+    hinweis.textContent = text;
+    hinweis.hidden = !text;
 
     var fehler = el.querySelector(".karte-fehler");
     if (daten.fehler) {
@@ -2044,6 +2275,73 @@
     speicherSchreiben(SCHLUESSEL_ZU, JSON.stringify(zu));
   }
 
+  /* ------------------------------------------------------ Sortierung */
+
+  /* Die Karten ordnen serverseitig nach Dringlichkeit: das Wichtigste oben,
+     darin das Aelteste zuerst. Das ist die richtige Vorgabe fuer die taegliche
+     Arbeit, beantwortet aber nicht „was kam zuletzt herein?". Deshalb hier ein
+     Umschalter je Karte — die Vorgabe bleibt die Vorgabe, die Abweichung ist
+     sichtbar und wird pro Geraet gemerkt. */
+
+  var SORT_FOLGE = ["", "neu", "alt"];
+  var SORT_TEXT = {
+    "": "dringendste zuerst",
+    "neu": "neueste zuerst",
+    "alt": "älteste zuerst"
+  };
+  var SORT_ZEICHEN = { "": "↕", "neu": "⇣", "alt": "⇡" };
+
+  function sortierungLesen() {
+    try {
+      var roh = JSON.parse(speicherLesen(SCHLUESSEL_SORTIERUNG, "{}"));
+      // Ein Array oder null waere auch "object" — beides hier wertlos.
+      return (roh && typeof roh === "object" && !Array.isArray(roh)) ? roh : {};
+    } catch (e) { return {}; }
+  }
+
+  function sortierungSchreiben(name, wert) {
+    var alle = sortierungLesen();
+    if (wert) { alle[name] = wert; } else { delete alle[name]; }
+    speicherSchreiben(SCHLUESSEL_SORTIERUNG, JSON.stringify(alle));
+  }
+
+  /* Wonach verglichen wird. Die Mail- und die Kalenderkarte legen die volle
+     Uhrzeit in zusatz.sortier ab — ohne sie waere die Reihenfolge mehrerer
+     Eintraege desselben Tages zufaellig. */
+  function sortierwert(p, leer) {
+    var z = p.zusatz && p.zusatz.sortier ? p.zusatz.sortier : p.datum;
+    return z ? String(z) : leer;
+  }
+
+  function nachDatum(liste, richtung) {
+    if (!richtung) { return liste; }
+    // Datumslose Posten gehoeren in BEIDEN Richtungen ans Ende — deshalb je
+    // Richtung ein anderer Ersatzwert.
+    var leer = richtung === "alt" ? "9999-99-99" : "";
+    var kopie = liste.slice();
+    kopie.sort(function (a, b) {
+      var x = sortierwert(a, leer), y = sortierwert(b, leer);
+      if (x === y) { return 0; }
+      if (richtung === "alt") { return x < y ? -1 : 1; }
+      return x > y ? -1 : 1;
+    });
+    return kopie;
+  }
+
+  function sortierKnopfZeichnen(el, richtung) {
+    var knopf = el.querySelector(".sortieren");
+    if (!knopf) { return; }
+    var naechste = SORT_FOLGE[(SORT_FOLGE.indexOf(richtung) + 1) % SORT_FOLGE.length];
+    knopf.textContent = SORT_ZEICHEN[richtung];
+    // Stand UND naechster Schritt im Klartext: Ein Pfeil allein sagt nicht,
+    // was er gerade bedeutet.
+    var text = "Sortierung: " + SORT_TEXT[richtung]
+             + " — klicken für " + SORT_TEXT[naechste];
+    knopf.title = text;
+    knopf.setAttribute("aria-label", text);
+    knopf.classList.toggle("aktiv", Boolean(richtung));
+  }
+
   /* ---------------------------------------------------------- Karten-Setup */
 
   var gezogen = null;
@@ -2054,8 +2352,25 @@
     // Erledigt-Knopf. Sie liegt trotzdem in `karten`, damit Verschieben,
     // Zuklappen und die Seitenleiste für sie genauso funktionieren.
     var istWerkzeug = el.hasAttribute("data-werkzeug");
+    // Anders als `erledigteZeigen` ueberlebt die Sortierung das Neuladen —
+    // sie ist eine Entscheidung ueber die Karte, keine Momentaufnahme.
     karten[name] = { element: el, daten: null, erledigteZeigen: false,
+                     sortierung: sortierungLesen()[name] || "",
                      zeitgeber: null, werkzeug: istWerkzeug };
+    sortierKnopfZeichnen(el, karten[name].sortierung);
+
+    var sortKnopf = el.querySelector(".sortieren");
+    if (sortKnopf) {
+      sortKnopf.addEventListener("click", function () {
+        var jetzt = karten[name].sortierung || "";
+        var neu = SORT_FOLGE[(SORT_FOLGE.indexOf(jetzt) + 1) % SORT_FOLGE.length];
+        karten[name].sortierung = neu;
+        sortierungSchreiben(name, neu);
+        sortierKnopfZeichnen(el, neu);
+        // Nur neu zeichnen, nicht neu holen: Die Daten liegen schon hier.
+        if (karten[name].daten) { karteZeichnen(name, karten[name].daten); }
+      });
+    }
 
     el.querySelector(".klappen").addEventListener("click", function () {
       el.classList.toggle("zu");

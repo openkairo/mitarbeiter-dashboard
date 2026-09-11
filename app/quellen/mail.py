@@ -327,7 +327,13 @@ def _ein_postfach_imap(konto: dict, werbung=WERBUNG_VORGABE) -> dict:
                 text=betreff[:160],
                 marke=marke,
                 link=webmail,
-                zusatz={"absender": adresse, "weg": "imap", "postfach": name},
+                # Volle Uhrzeit nur zum Sortieren: `datum` bleibt der Tag,
+                # weil die Anzeige daraus „gestern“ macht. Ohne diesen Wert
+                # waere die Reihenfolge mehrerer Mails desselben Tages
+                # zufaellig — und das ist im Posteingang der Normalfall.
+                # Dasselbe Muster wie in kalender.py.
+                zusatz={"absender": adresse, "weg": "imap", "postfach": name,
+                        "sortier": wann.isoformat() if wann else ""},
             ))
     finally:
         try:
@@ -436,7 +442,9 @@ def _ein_postfach_api(konto: dict, werbung=WERBUNG_VORGABE) -> dict:
             marke=marke,
             link=webmail,
             zusatz={"absender": adresse_von, "weg": "api", "postfach": name,
-                    "anhaenge": len(n.get("attachments") or [])},
+                    "anhaenge": len(n.get("attachments") or []),
+                    # Siehe IMAP-Zweig: die Uhrzeit nur fuer die Sortierung.
+                    "sortier": wann.isoformat() if wann else ""},
         ))
 
     return {"posten": liste, "ungelesen": ungelesen,
