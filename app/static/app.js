@@ -828,14 +828,23 @@
         kasten.appendChild(was);
       }
 
-      // Was gerade läuft oder schiefging, kommt von der Wache. Sonst zählt der
-      // frische Vergleich — er ist Sekunden alt, die Datei oft Stunden.
-      var laufend = s.zustand === "laeuft" || s.zustand === "fehler" || s.zustand === "fertig";
-      var meldung = laufend ? s.meldung : (l.meldung || s.meldung);
-      var wann = laufend ? s.am : (l.am || s.am);
+      // „läuft" und „fehler" sagen, was der Server GERADE tut — die gehören
+      // nach vorn. „fertig" gehört NICHT dazu: Der Zustand bleibt nach einem
+      // Update für immer stehen, und die Erfolgsmeldung verdeckte damit jede
+      // neue Version. Liegt etwas bereit, zählt deshalb immer der frische
+      // Vergleich; steht nichts an, darf „Auf Version X gebracht" stehen.
+      // Der Punkt in der Seitenleiste kommt sonst erst mit der Übersicht im
+      // Minutentakt nach — nach einem „Nachsehen" stünden Kasten und Leiste
+      // bis zu eine Minute lang im Widerspruch.
+      updateHinweisZeichnen({ verfuegbar: l.verfuegbar, meldung: l.meldung });
+
+      var jetzt = s.zustand === "laeuft" || s.zustand === "fehler";
+      var meldung = jetzt ? s.meldung
+        : (l.verfuegbar ? l.meldung : (s.meldung || l.meldung));
+      var wann = jetzt ? s.am : (l.verfuegbar ? l.am : (s.am || l.am));
       if (meldung) {
         var art = s.zustand === "fehler" ? " schlecht"
-          : (s.zustand === "fertig" || !l.verfuegbar ? " gut" : "");
+          : (l.verfuegbar ? "" : " gut");
         var m = bauen("p", "e-ergebnis" + art, meldung);
         if (wann) { m.appendChild(bauen("small", "", " · " + wann.replace("T", " ").slice(0, 16))); }
         kasten.appendChild(m);

@@ -26,6 +26,8 @@ import hashlib
 import json
 import logging
 import os
+import time
+import urllib.parse
 import urllib.request
 from datetime import date, datetime
 from pathlib import Path
@@ -985,8 +987,17 @@ def _nummer(text: str):
     return tuple(int(t) for t in teile)
 
 
-def _roh_holen(datei: str, zeit: int = 5) -> str:
+def _roh_holen(datei: str, zeit: int = 5, frisch: str = "") -> str:
+    """Eine Datei aus dem Repo. `frisch` haengt als Fragezeichen-Anhang an.
+
+    Der Auslieferdienst von GitHub gibt eine Datei einige Minuten lang aus
+    seinem Zwischenspeicher heraus — am 12.09.2026 kam die Aenderungsliste
+    noch mit dem Stand der Vorversion zurueck, obwohl die Nummer daneben
+    schon die neue war. Ein Anhang, der sich aendert, umgeht den Speicher.
+    """
     url = f"{UPDATE_ROH}/{UPDATE_REPO}/main/{datei}"
+    if frisch:
+        url += "?v=" + urllib.parse.quote(frisch, safe="")
     anfrage = urllib.request.Request(url, headers={
         # GitHub weist Anfragen ohne Kennung ab; ausserdem soll im Zweifel
         # nachvollziehbar sein, wer da fragt.
@@ -1017,7 +1028,10 @@ def _fernstand(frisch: bool = False) -> dict:
 
     ergebnis = dict(gemerkt)
     try:
-        fern = _roh_holen("VERSION").strip()
+        # Die Nummer MUSS aktuell sein — deshalb der Zeitstempel als Anhang.
+        # Sechs Zeichen alle zehn Minuten; am Zwischenspeicher vorbei kostet
+        # das nichts und erspart den Fall "die Nummer ist von vorgestern".
+        fern = _roh_holen("VERSION", frisch=str(int(time.time()))).strip()
         ergebnis["fassung"] = fern
         ergebnis["fehler"] = ""
         # Die Aenderungsliste kostet das Vierzigfache und interessiert nur,
@@ -1025,7 +1039,7 @@ def _fernstand(frisch: bool = False) -> dict:
         if _nummer(fern) > _nummer(_fassung()):
             try:
                 ergebnis["aenderungen"] = _punkte(
-                    _roh_holen("CHANGELOG.md", 8).splitlines(), fern)
+                    _roh_holen("CHANGELOG.md", 8, frisch=fern).splitlines(), fern)
             except Exception as fehler:                           # noqa: BLE001
                 log.info("Änderungsliste nicht geholt: %s", fehler)
                 ergebnis["aenderungen"] = []

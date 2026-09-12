@@ -14,6 +14,25 @@ jedem einzelnen Arbeitsschritt.
 
 *Zurzeit nichts.*
 
+## 1.4.3 — 13.09.2026
+
+Drei Korrekturen an der Update-Anzeige aus 1.4.0 — der Server erkannte eine
+neue Version richtig, der Kasten zeigte sie nur nicht.
+
+- **Nach einem Update verdeckte die Erfolgsmeldung jede neue Version.** Der
+  Kasten zeigte weiter „Auf Version X gebracht", obwohl längst eine neuere
+  bereitlag — der Zustand „fertig" bleibt nach einem Update für immer stehen
+  und hatte Vorrang vor dem frischen Vergleich. Den behalten jetzt nur noch
+  „läuft" und „fehler": Die sagen, was der Server **gerade** tut. Liegt etwas
+  bereit, steht das im Kasten; sonst darf die Erfolgsmeldung stehen bleiben.
+- **Die Änderungsliste einer neuen Version kam manchmal von der Vorversion.**
+  GitHub liefert Rohdateien bis zu fünf Minuten aus einem Zwischenspeicher
+  (`cache-control: max-age=300`) — beobachtet am 12.09.2026: Die Nummer war
+  schon 1.4.2, die Liste daneben noch die von 1.4.1. Beide Abrufe tragen jetzt
+  einen Anhang, der sich ändert, und gehen damit am Speicher vorbei.
+- Der Punkt in der Seitenleiste zieht nach einem „Nachsehen" sofort mit, statt
+  bis zur nächsten Minute etwas anderes zu behaupten als der Kasten daneben.
+
 ## 1.4.2 — 12.09.2026
 
 - **„Öffnen" bei einer Rechnung geht jetzt in den Beleg hinein.** Bisher
