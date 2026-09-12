@@ -44,11 +44,15 @@ LINK_TEXT = "Lexware"
 # gehoert in den Pfad — hier immer SalesInvoice, weil die Karte ausschliesslich
 # invoice und salesinvoice holt (siehe lexware.belegliste).
 #
+# VoucherView statt VoucherList: Die Liste hebt den Beleg nur hervor, man muss
+# ihn dann noch anklicken. Wer in der Karte auf "oeffnen" drueckt, will ihn
+# lesen — also direkt hinein.
+#
 # Der alte Pfad /permanent/voucher/<id> stammt aus der Lexoffice-Zeit und ist
 # seit der Umbenennung tot: Er leitet auf app.lexware.de weiter und endet dort
 # im 404. Zu erkennen war das nicht durch Ausprobieren — unter /vouchers
 # antwortet jede Adresse mit 200, weil dort die Anwendung ausgeliefert wird.
-BELEG_LINK = "https://app.lexware.de/vouchers#!/VoucherList//SalesInvoice/{}?filter=lastedited"
+BELEG_LINK = "https://app.lexware.de/vouchers#!/VoucherView/SalesInvoice/{}"
 
 VERKAUF = re.compile(r"^(RE|SG)-", re.IGNORECASE)
 FENSTER_TAGE = 400

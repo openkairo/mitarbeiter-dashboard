@@ -14,6 +14,13 @@ jedem einzelnen Arbeitsschritt.
 
 *Zurzeit nichts.*
 
+## 1.4.2 — 12.09.2026
+
+- **„Öffnen" bei einer Rechnung geht jetzt in den Beleg hinein.** Bisher
+  landete man in der Belegliste, in der der Beleg nur hervorgehoben war — man
+  musste ihn dort noch einmal anklicken. Wer in der Karte auf „öffnen" drückt,
+  will ihn lesen (`VoucherView` statt `VoucherList`).
+
 ## 1.4.1 — 12.09.2026
 
 - **Alle Lexware-Links führten ins Leere.** Sie zeigten auf Pfade unter
