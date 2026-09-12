@@ -26,6 +26,8 @@ TTL = 300
 ANLAUF = 0
 LINK = "https://app.lexoffice.de/permanent/vouchers"
 LINK_TEXT = "Lexware"
+# "Posten" gibt es absichtlich nicht mehr als Kennzahl (siehe unten) —
+# damit faellt die Kopfkachel auf die Zahl der OFFENEN Posten zurueck.
 KOPFZAHL = ("Posten", "Rechnung fehlt", "ohne Rechnung")
 # Keine Erkennung im Tagesfortschritt. Der Bericht entsteht einmal am Tag um
 # 10:15 — was die Person gestern Nachmittag zugeordnet hat, verschwindet erst mit
@@ -97,8 +99,12 @@ def fetch(env: dict) -> dict:
 
     return {
         "posten": sortieren(liste),
+        # Bewusst KEINE Kennzahl "Posten": Sie kaeme aus dem Bericht und zaehlte
+        # Abgehaktes mit — die einzige Stelle, an der ein gesetzter Haken nicht
+        # ankam. Ohne sie faellt die Kopfkachel auf die Zahl der offenen Posten
+        # zurueck, und die Badge zeigt dieselbe Zahl. (12.09.2026: Cashback in
+        # Lexware zugeordnet, im Dashboard abgehakt, oben stand trotzdem 3.)
         "kennzahlen": {
-            "Posten": len(liste),
             "Summe": summe,
             "Rechnung fehlt": zaehler.get("fehlt", 0),
         },

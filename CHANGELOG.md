@@ -14,6 +14,16 @@ jedem einzelnen Arbeitsschritt.
 
 *Zurzeit nichts.*
 
+## 1.3.1 — 12.09.2026
+
+- **Bank-Abgleich: Der Haken zählt jetzt überall.** Kopfkachel und
+  Kennzahl „Posten" kamen aus dem Tagesbericht und zählten abgehakte
+  Buchungen weiter mit — oben stand „3", in der Badge „2". Die Karte liefert
+  die Zahl nicht mehr selbst; gezählt wird, was offen ist. Hintergrund:
+  Buchungen ohne Beleg (Cashback, Zinsen) kann die Automation nicht auflösen,
+  weil Lexware Bankumsätze nicht über die Schnittstelle hergibt — sie werden
+  im Dashboard abgehakt, und der Haken hält über jeden neuen Bericht.
+
 ## 1.3.0 — 11.09.2026
 
 Der Schwerpunkt liegt auf der **Einrichtung**: Ein Assistent führt durch den
