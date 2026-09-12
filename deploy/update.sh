@@ -69,7 +69,10 @@ for z in aenderungen.split(chr(10)):
 alt["aenderungen"] = [p.replace("**", "") for p in punkte]
 json.dump(alt, open(ziel, "w"), ensure_ascii=False, indent=1)
 PY
-    echo "[$INSTANZ] $1: $2"
+    # Mit Uhrzeit: Ohne sie liess sich am 12.09.2026 nicht mehr feststellen,
+    # welcher Schritt die Zeit gefressen hat — die Dauer musste aus
+    # Ordnernamen und dem Docker-Journal zusammengesucht werden.
+    echo "[$(date +%T)] [$INSTANZ] $1: $2"
 }
 
 # Versionsnummer statt Commit-Kennung: „1.2.0" sagt, ob etwas Grosses oder eine
@@ -149,7 +152,13 @@ fi
 ZEIT="$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$SICHERUNGEN/$ZEIT"
 melden laeuft "Lege eine Sicherung des laufenden Stands an …"
+# Was sich seit der letzten Sicherung nicht geaendert hat, wird verlinkt statt
+# kopiert. Fuenf Sicherungen kosten damit kaum mehr Platz als eine — auf einer
+# Platte, die zu 87 % voll ist, ist das kein Nebenschauplatz. Zurueckholen
+# funktioniert unveraendert: Jede Sicherung sieht aus wie ein voller Ordner.
+VORIGE="$(ls -1dt "$SICHERUNGEN"/*/ 2>/dev/null | head -1 || true)"
 rsync -a --exclude '.env' --exclude 'data/' --exclude '.vorher/' \
+      ${VORIGE:+--link-dest="$VORIGE"} \
       "$ORDNER/" "$SICHERUNGEN/$ZEIT/"
 
 melden laeuft "Spiele Version ${NEU_F:-$NEU} auf …"
@@ -176,11 +185,15 @@ fi
 HOST="$(grep -m1 '^HOST=' "$ORDNER/.env" | cut -d= -f2- | tr -d '\r' || true)"
 melden laeuft "Warte darauf, dass die Seite antwortet …"
 GESUND=""
-for _ in $(seq 1 20); do
-    if curl -fsS --max-time 8 "https://$HOST/healthz" 2>/dev/null | grep -q '"status":"ok"'; then
+# Sekuendlich statt alle drei Sekunden: Der Container antwortet nach zwei bis
+# vier Sekunden. Ein starrer Dreierschritt liess ihn im Schnitt eine Sekunde
+# laenger als noetig als "nicht da" gelten. Die Obergrenze bleibt bei einer
+# Minute — laenger als das ist kein langsamer Start mehr, sondern ein Fehler.
+for _ in $(seq 1 60); do
+    if curl -fsS --max-time 5 "https://$HOST/healthz" 2>/dev/null | grep -q '"status":"ok"'; then
         GESUND="ja"; break
     fi
-    sleep 3
+    sleep 1
 done
 
 if [[ -z "$GESUND" ]]; then

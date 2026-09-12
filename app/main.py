@@ -26,6 +26,7 @@ import hashlib
 import json
 import logging
 import os
+import urllib.request
 from datetime import date, datetime
 from pathlib import Path
 
@@ -904,29 +905,32 @@ def _fassung() -> str:
         return ""
 
 
-def _aenderungen_hier() -> list:
-    """Was die LAUFENDE Version gebracht hat — der oberste Abschnitt der
-    Änderungsliste, die neben dem Programm liegt."""
-    try:
-        zeilen = (BASIS.parent / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return []
-    # Ein Punkt bricht in der Datei ueber mehrere Zeilen um. Ohne das
-    # Zusammenziehen stuenden auf der Seite Satzfetzen.
-    # Der erste Abschnitt mit einer NUMMER. Ganz oben steht die Sammelstelle
-    # „Unveröffentlicht“ — die ist noch keine Fassung und gehört nicht hierher.
+def _punkte(zeilen, nummer: str = "") -> list:
+    """Die Stichpunkte eines Abschnitts der Änderungsliste.
+
+    Ohne `nummer` der erste Abschnitt mit einer Zahl — ganz oben steht die
+    Sammelstelle „Unveröffentlicht“, die noch keine Fassung ist. Mit `nummer`
+    genau der Abschnitt dieser Version.
+    """
     raus, drin = [], False
     for zeile in zeilen:
         if zeile.startswith("## "):
             if drin:
                 break
-            if not zeile[3:4].isdigit():
+            kopf = zeile[3:].strip()
+            if nummer:
+                # „## 1.3.1 — 12.09.2026“: die Nummer steht vorn.
+                if not (kopf == nummer or kopf.startswith(nummer + " ")):
+                    continue
+            elif not kopf[:1].isdigit():
                 continue
             drin = True
             continue
         if not drin or not zeile.strip():
             continue
         zeile = zeile.strip()
+        # Ein Punkt bricht in der Datei ueber mehrere Zeilen um. Ohne das
+        # Zusammenziehen stuenden auf der Seite Satzfetzen.
         # Ein Aufzaehlungszeichen ist "-" oder "*" MIT Leerzeichen dahinter.
         # Ohne diese Bedingung faengt eine Folgezeile, die mit **fett**
         # beginnt, einen neuen Punkt an und zerreisst den Satz.
@@ -937,11 +941,137 @@ def _aenderungen_hier() -> list:
     return [z.replace("**", "") for z in raus][:12]
 
 
-def _update_hinweis() -> dict:
-    """Nur das, was die Seitenleiste braucht: liegt etwas bereit?"""
+def _aenderungen_hier() -> list:
+    """Was die LAUFENDE Version gebracht hat — der oberste Abschnitt der
+    Änderungsliste, die neben dem Programm liegt."""
+    try:
+        zeilen = (BASIS.parent / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    return _punkte(zeilen)
+
+
+# --------------------------------------------- Gibt es eine neuere Version?
+
+# Frueher wusste das nur der Server: Eine Wache auf dem Host holte per `git
+# fetch` den Stand und schrieb ihn in eine Datei. Das dauerte im besten Fall
+# eine Minute und im Normalfall bis zum naechsten Tag — denn ausgeloest wurde
+# es nur von Hand oder einmal taeglich.
+#
+# Zum ERKENNEN reicht ein Blick auf eine Datei mit sechs Zeichen. Der Container
+# holt sie selbst; gemessen 0,03 Sekunden. Das AUFSPIELEN bleibt bei der Wache
+# — dafuer braucht es Rechte, die im Container nichts zu suchen haben.
+UPDATE_REPO = (os.environ.get("UPDATE_REPO")
+               or "openkairo/mitarbeiter-dashboard").strip().strip("/")
+# Als Konstante, damit die Pruefung im Test auf einen eigenen Mini-Server
+# zeigen kann — sonst liesse sie sich nur mit echtem GitHub pruefen.
+UPDATE_ROH = (os.environ.get("UPDATE_ROH_URL")
+              or "https://raw.githubusercontent.com").rstrip("/")
+# So lange gilt ein geholter Stand. Ein offener Tab fragt die Uebersicht im
+# Minutentakt ab; ohne Sperre waeren das sechzig Abrufe in der Stunde fuer
+# eine Zahl, die sich selten aendert. „Nachsehen" umgeht die Sperre.
+UPDATE_SPERRE_SEK = 600
+
+
+def _nummer(text: str):
+    """„1.3.10“ als Zahlentupel. Leer, wenn es keine Versionsnummer ist.
+
+    Als Text verglichen waere „1.3.9“ groesser als „1.3.10“ — der Fehler
+    faellt erst bei der zehnten Korrektur auf und dann als „kein Update da“.
+    """
+    teile = (text or "").strip().split(".")
+    if not teile or not all(t.isdigit() for t in teile):
+        return ()
+    return tuple(int(t) for t in teile)
+
+
+def _roh_holen(datei: str, zeit: int = 5) -> str:
+    url = f"{UPDATE_ROH}/{UPDATE_REPO}/main/{datei}"
+    anfrage = urllib.request.Request(url, headers={
+        # GitHub weist Anfragen ohne Kennung ab; ausserdem soll im Zweifel
+        # nachvollziehbar sein, wer da fragt.
+        "User-Agent": f"smg-dashboard/{_fassung() or 'unbekannt'}"})
+    with urllib.request.urlopen(anfrage, timeout=zeit) as antwort:
+        return antwort.read().decode("utf-8", "replace")
+
+
+def _fernstand(frisch: bool = False) -> dict:
+    """Was auf GitHub liegt — gemerkt, damit nicht jede Anfrage hinausgeht.
+
+    Gibt IMMER etwas zurueck. Ist GitHub nicht erreichbar, gilt der zuletzt
+    bekannte Stand: Ein Netzfehler ist kein Grund, die Seite mit einer
+    Fehlermeldung zu behelligen, die niemand beheben kann.
+    """
+    gemerkt = {}
+    try:
+        gemerkt = json.loads(db.kv_lesen("update_fern", "") or "{}")
+    except ValueError:
+        gemerkt = {}
+    if not frisch and gemerkt.get("am"):
+        try:
+            alter = (datetime.now() - datetime.fromisoformat(gemerkt["am"])).total_seconds()
+            if 0 <= alter < UPDATE_SPERRE_SEK:
+                return gemerkt
+        except ValueError:
+            pass
+
+    ergebnis = dict(gemerkt)
+    try:
+        fern = _roh_holen("VERSION").strip()
+        ergebnis["fassung"] = fern
+        ergebnis["fehler"] = ""
+        # Die Aenderungsliste kostet das Vierzigfache und interessiert nur,
+        # wenn es ueberhaupt etwas Neues gibt.
+        if _nummer(fern) > _nummer(_fassung()):
+            try:
+                ergebnis["aenderungen"] = _punkte(
+                    _roh_holen("CHANGELOG.md", 8).splitlines(), fern)
+            except Exception as fehler:                           # noqa: BLE001
+                log.info("Änderungsliste nicht geholt: %s", fehler)
+                ergebnis["aenderungen"] = []
+        else:
+            ergebnis["aenderungen"] = []
+        ergebnis["am"] = datetime.now().isoformat(timespec="seconds")
+    except Exception as fehler:                                   # noqa: BLE001
+        # Kein Netz, GitHub weg, Zeitueberschreitung: Der alte Stand bleibt
+        # stehen, und `am` bleibt alt — damit wird beim naechsten Mal wieder
+        # nachgesehen statt zehn Minuten zu warten.
+        log.info("Versionsabgleich nicht möglich: %s", fehler)
+        ergebnis["fehler"] = str(fehler)[:160]
+    db.kv_schreiben("update_fern", json.dumps(ergebnis, ensure_ascii=False))
+    return ergebnis
+
+
+def _update_lage(frisch: bool = False) -> dict:
+    """Die eine Wahrheit: Liegt eine neuere Version bereit?
+
+    Der Nummernvergleich schlaegt die Zustandsdatei der Wache. Nach einem
+    Aufspielen steht dort noch „verfuegbar“, obwohl die Nummern laengst gleich
+    sind — die Datei weiss nur, was beim letzten Lauf war.
+    """
+    hier, fern = _fassung(), _fernstand(frisch)
+    neu = fern.get("fassung") or ""
+    if _nummer(neu) and _nummer(hier):
+        verfuegbar = _nummer(neu) > _nummer(hier)
+        meldung = (f"Version {neu} liegt bereit — hier läuft {hier}."
+                   if verfuegbar else f"Version {hier} ist die neueste.")
+        return {"verfuegbar": verfuegbar, "meldung": meldung,
+                "neue_fassung": neu if verfuegbar else "",
+                "aenderungen": fern.get("aenderungen") or [] if verfuegbar else [],
+                "am": fern.get("am") or "", "fehler": fern.get("fehler") or ""}
+    # Ohne brauchbare Nummern bleibt nur, was die Wache zuletzt vermerkt hat.
     stand = _update_stand()
     return {"verfuegbar": stand.get("zustand") == "verfuegbar",
-            "meldung": stand.get("meldung") or ""}
+            "meldung": stand.get("meldung") or "",
+            "neue_fassung": stand.get("neue_fassung") or "",
+            "aenderungen": stand.get("aenderungen") or [],
+            "am": stand.get("am") or "", "fehler": fern.get("fehler") or ""}
+
+
+def _update_hinweis() -> dict:
+    """Nur das, was die Seitenleiste braucht: liegt etwas bereit?"""
+    lage = _update_lage()
+    return {"verfuegbar": lage["verfuegbar"], "meldung": lage["meldung"]}
 
 
 def _update_stand() -> dict:
@@ -1032,9 +1162,18 @@ def api_einrichtung_erneut():
 
 
 @app.get("/api/update")
-def api_update_stand():
+def api_update_stand(request: Request):
+    # ?frisch=1 kommt vom Knopf „Nachsehen“ und umgeht die Sperrzeit. Das
+    # Nachsehen geht seitdem direkt hinaus, statt eine Markerdatei abzulegen,
+    # auf die eine Wache erst in der naechsten Minute stoesst.
+    frisch = request.query_params.get("frisch") in ("1", "ja", "true")
+    lage = _update_lage(frisch)
     stand = _update_stand()
     return {"stand": stand,
+            # Was die Wache zuletzt TAT (laeuft, fehlgeschlagen, aufgespielt)
+            # steht in `stand`; ob etwas BEREITLIEGT, sagt `lage` — das ist
+            # frisch verglichen und hat darum Vorrang.
+            "lage": lage,
             "fassung": _fassung(),
             "aenderungen_hier": _aenderungen_hier(),
             "angefordert": UPDATE_ANFORDERUNG.exists(),

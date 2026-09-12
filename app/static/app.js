@@ -765,12 +765,23 @@
 
   /* ----------------------------------------------------------- Update */
 
-  function updateLaden() {
+  // Läuft gerade ein Update? Dann bleibt die Seite dran, auch wenn der Server
+  // zwischendurch nicht antwortet.
+  var updateWacht = false;
+  var updateVersuche = 0;
+
+  function updateLaden(frisch, dran) {
     var kasten = document.getElementById("update-stand");
     if (!kasten) { return Promise.resolve(); }
-    return holen("/api/update").then(function (d) {
+    if (!dran) { updateVersuche = 0; }
+    return holen("/api/update" + (frisch ? "?frisch=1" : "")).then(function (d) {
+      updateVersuche = 0;
       leeren(kasten);
       var s = d.stand || {};
+      // `stand` sagt, was der Server zuletzt TAT; `lage` sagt frisch
+      // verglichen, ob etwas BEREITLIEGT. Nach einem Aufspielen steht in der
+      // Datei noch „verfügbar“, obwohl die Nummern längst gleich sind.
+      var l = d.lage || {};
       var laeuft = s.zustand === "laeuft" || d.angefordert;
 
       var zeile = bauen("p", "update-zeile");
@@ -805,23 +816,28 @@
       }
 
       // Was die neue Version bringt — bevor man sie aufspielt, nicht danach.
-      if (s.zustand === "verfuegbar" && s.aenderungen && s.aenderungen.length) {
+      if (l.verfuegbar && l.aenderungen && l.aenderungen.length) {
         var was = bauen("div", "update-aenderungen");
-        was.appendChild(bauen("strong", "", "Neu in " + (s.neue_fassung || "dieser Version") + ":"));
+        was.appendChild(bauen("strong", "", "Neu in " + (l.neue_fassung || "dieser Version") + ":"));
         var ul = bauen("ul", "");
-        for (var i = 0; i < s.aenderungen.length; i++) {
-          var text = s.aenderungen[i].replace(/^[-*]\s*/, "").replace(/\*\*/g, "");
+        for (var i = 0; i < l.aenderungen.length; i++) {
+          var text = l.aenderungen[i].replace(/^[-*]\s*/, "").replace(/\*\*/g, "");
           ul.appendChild(bauen("li", "", text));
         }
         was.appendChild(ul);
         kasten.appendChild(was);
       }
 
-      if (s.meldung) {
+      // Was gerade läuft oder schiefging, kommt von der Wache. Sonst zählt der
+      // frische Vergleich — er ist Sekunden alt, die Datei oft Stunden.
+      var laufend = s.zustand === "laeuft" || s.zustand === "fehler" || s.zustand === "fertig";
+      var meldung = laufend ? s.meldung : (l.meldung || s.meldung);
+      var wann = laufend ? s.am : (l.am || s.am);
+      if (meldung) {
         var art = s.zustand === "fehler" ? " schlecht"
-          : (s.zustand === "fertig" || s.zustand === "aktuell" ? " gut" : "");
-        var m = bauen("p", "e-ergebnis" + art, s.meldung);
-        if (s.am) { m.appendChild(bauen("small", "", " · " + s.am.replace("T", " ").slice(0, 16))); }
+          : (s.zustand === "fertig" || !l.verfuegbar ? " gut" : "");
+        var m = bauen("p", "e-ergebnis" + art, meldung);
+        if (wann) { m.appendChild(bauen("small", "", " · " + wann.replace("T", " ").slice(0, 16))); }
         kasten.appendChild(m);
       }
 
@@ -839,13 +855,56 @@
       kasten.appendChild(knopf);
       // Solange etwas läuft, von selbst nachsehen — sonst muss man raten,
       // wann es durch ist.
-      if (laeuft) { window.setTimeout(updateLaden, 5000); }
-    }).catch(function () { /* Kasten bleibt leer */ });
+      if (laeuft) {
+        updateWacht = true;
+        window.setTimeout(function () { updateLaden(false, true); }, 2000);
+      } else if (updateWacht) {
+        // Gerade noch gelaufen, jetzt fertig: Die Seite hängt bis hierhin am
+        // ALTEN JavaScript und zeigte die alte Nummer. Einmal neu laden.
+        updateWacht = false;
+        if (s.zustand === "fertig") {
+          // Kein reload(): Safari holt die Seite dann gern aus dem Cache.
+          window.location.href = window.location.pathname + "?frisch=" + Date.now()
+            + "#einstellungen";
+        }
+        // Bei „fehler" bewusst NICHT neu laden — die rote Meldung ist die
+        // einzige Spur, was schiefgegangen ist.
+      }
+    }).catch(function () {
+      // Genau hier stand der Kasten still: Beim Neubau ist das Dashboard ein
+      // paar Sekunden weg, die Nachfrage scheitert — und ohne neuen Termin
+      // fragte die Seite nie wieder. Stehen blieb „Baue den Container neu …",
+      // obwohl das Update längst durch war. Während eines Laufs ist der
+      // Ausfall der ERWARTETE Zustand, kein Grund aufzugeben.
+      if (!updateWacht) { return; }
+      updateVersuche += 1;
+      if (updateVersuche > 90) {           // drei Minuten
+        updateWacht = false;
+        var kasten2 = document.getElementById("update-stand");
+        if (kasten2) {
+          leeren(kasten2);
+          kasten2.appendChild(bauen("p", "e-ergebnis schlecht",
+            "Das Dashboard antwortet seit drei Minuten nicht. Lade die Seite "
+            + "neu — das Update läuft auf dem Server weiter."));
+        }
+        return;
+      }
+      var kasten = document.getElementById("update-stand");
+      if (kasten) {
+        leeren(kasten);
+        kasten.appendChild(bauen("p", "e-ergebnis", "Container startet neu …"));
+      }
+      window.setTimeout(function () { updateLaden(false, true); }, 2000);
+    });
   }
 
   function anfordern(daten) {
     return holen("/api/update", "POST", daten).then(function () {
-      window.setTimeout(updateLaden, 1500);
+      // Ab jetzt drangeblieben: Der Neubau wirft die Seite gleich kurz aus
+      // der Leitung, und ohne diesen Schalter gälte der Ausfall als Abbruch.
+      updateWacht = true;
+      updateVersuche = 0;
+      window.setTimeout(function () { updateLaden(false, true); }, 1500);
     }).catch(function (fehler) {
       var kasten = document.getElementById("update-stand");
       if (kasten) {
@@ -858,9 +917,14 @@
   var updatePruefen = document.getElementById("update-pruefen");
   if (updatePruefen) {
     updatePruefen.addEventListener("click", function () {
+      // Fragt direkt bei GitHub nach der Versionsnummer — das dauert
+      // Sekundenbruchteile. Früher legte der Knopf eine Anforderung ab, auf
+      // die eine Wache erst in der nächsten Minute stieß.
       updatePruefen.disabled = true;
-      anfordern({ nur_pruefen: true }).then(function () {
-        window.setTimeout(function () { updatePruefen.disabled = false; }, 4000);
+      updatePruefen.textContent = "sieht nach …";
+      updateLaden(true).then(function () {
+        updatePruefen.disabled = false;
+        updatePruefen.textContent = "Nachsehen";
       });
     });
   }
@@ -1699,7 +1763,14 @@
     var zugaenge = name === "einstellungen" && Boolean(zugaengeBereich);
     document.body.classList.toggle("zugaenge", zugaenge);
     zugaengeBereich.hidden = !zugaenge;
-    if (zugaenge && !zugaengeGeladen) { zugaengeLaden(); }
+    if (zugaenge && !zugaengeGeladen) {
+      zugaengeLaden();
+    } else if (zugaenge) {
+      // Beim zweiten Öffnen blieb der Update-Kasten auf dem Stand von vorhin
+      // stehen — `zugaengeGeladen` verhinderte jedes Nachladen. Die Zugänge
+      // selbst müssen nicht neu geholt werden, der Versionsstand schon.
+      updateLaden();
+    }
 
     var einzeln = Boolean(name) && Boolean(karten[name]);
     document.body.classList.toggle("einzel", einzeln);

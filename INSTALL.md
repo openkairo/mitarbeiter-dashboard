@@ -150,3 +150,12 @@ der `.env` ein:
 Einmalig `deploy/update-einrichten.sh` von einem Rechner mit `gh`-Anmeldung.
 Danach steht in den Einstellungen unter *Wartung* ein Knopf, der die neue
 Version aus dem Repo holt — je Instanz einzeln, mit Rücknahme bei Fehlschlag.
+
+**Ob** eine neue Version bereitliegt, merkt das Dashboard selbst: Es liest die
+Datei `VERSION` aus dem Repo und vergleicht die Nummer. Läuft dein Stand nicht
+gegen den Ursprung, trag deinen eigenen in der `.env` ein:
+
+    UPDATE_REPO=deinkonto/dein-fork
+
+Ohne Netzzugang aus dem Container übernimmt das der tägliche Lauf der Wache auf
+dem Server.

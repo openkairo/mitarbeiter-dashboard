@@ -89,13 +89,26 @@ fi
 git -C /opt/smg-update/repo rev-parse --short=8 origin/main"
 echo "  ✓ Arbeitskopie steht"
 
+# Viermal je Minute statt einmal: Cron kann nicht feiner als eine Minute, also
+# ruft die Zeile die Wache in einer Schleife mit 15 Sekunden Abstand. Aus
+# "bis zu 60 Sekunden Wartezeit" werden "bis zu 15" — ohne Dienst, der
+# dauerhaft laeuft. Ueberlappen koennen die Laeufe nicht: Die Wache sperrt
+# sich per flock, und nach dem vierten Lauf wird nicht mehr geschlafen —
+# sonst ragte die Schleife in die naechste Minute hinein.
+# Zwei Zeilen, zwei Aufgaben: Die Minutenwache fuehrt aus, was jemand
+# angefordert hat; der taegliche Lauf legt fuer jede Instanz eine Pruefung an.
+# Bis zum 12.09.2026 wurde nur die erste eingerichtet — die zweite stand von
+# Hand im Crontab und waere beim naechsten Einrichten dem `grep -v` zum Opfer
+# gefallen. Seit demselben Tag prueft das Dashboard ohnehin selbst; der
+# taegliche Lauf ist die Rueckfallebene fuer Instanzen ohne Netz nach draussen.
 echo "▸ 4/4  Wache einrichten"
 scp -q -i "$SSH_KEY" "$(dirname "${BASH_SOURCE[0]}")/update.sh" \
                      "$(dirname "${BASH_SOURCE[0]}")/update-wache.sh" "$SERVER:/opt/smg-update/"
 fern "chmod +x /opt/smg-update/*.sh
 touch /var/log/smg-update.log
 ( crontab -l 2>/dev/null | grep -v 'smg-update/update-wache.sh' ; \
-  echo '* * * * * /opt/smg-update/update-wache.sh >/dev/null 2>&1' ) | crontab -
+  echo '* * * * * for i in 1 2 3 4; do /opt/smg-update/update-wache.sh; test \$i = 4 || sleep 15; done >/dev/null 2>&1' ; \
+  echo '17 5 * * * /opt/smg-update/update-wache.sh --taeglich >/dev/null 2>&1' ) | crontab -
 crontab -l | grep smg-update"
 echo
 echo "Fertig. In den Settings steht jetzt unter „Update“ ein Knopf."

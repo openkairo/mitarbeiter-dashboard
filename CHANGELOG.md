@@ -14,6 +14,73 @@ jedem einzelnen Arbeitsschritt.
 
 *Zurzeit nichts.*
 
+## 1.4.0 — 12.09.2026
+
+Diese Fassung repariert das Aktualisieren selbst. Bisher dauerte es im
+Normalfall einen Tag, bis eine neue Version überhaupt auffiel, das Aufspielen
+brauchte über eine Minute — und am Ende stand im Kasten weiter „Baue den
+Container neu …", obwohl längst alles fertig war.
+
+**Bestehende Instanzen müssen nichts nachtragen.** `UPDATE_REPO` hat eine
+Vorgabe; wer seinen Stand aus einem eigenen Fork holt, trägt ihn dort ein.
+
+> **Eine Eigenheit beim Aufspielen dieser Version:** Die Wache nimmt
+> `update.sh` aus ihrer Arbeitskopie des Repos. Der Update-Lauf, der 1.4.0
+> installiert, benutzt deshalb noch das alte Skript und zieht die Arbeitskopie
+> dabei erst nach. Die Beschleunigungen greifen vollständig **ab dem nächsten**
+> Update.
+
+- **Der Update-Kasten blieb stehen, obwohl das Update längst durch war.**
+  Während des Neubaus ist das Dashboard ein paar Sekunden nicht erreichbar —
+  die Nachfrage schlug fehl, und der Fehlerzweig setzte **keinen neuen
+  Termin**. Danach fragte die Seite nie wieder: Stehen blieb „Baue den
+  Container neu …", bis jemand von Hand neu lud. Jetzt bleibt die Seite dran,
+  nennt den Ausfall beim Namen („Container startet neu …") und **lädt sich
+  nach „fertig" einmal selbst neu** — sonst hinge sie weiter am alten
+  JavaScript und zeigte die alte Nummer. Nach einem **Fehlschlag** lädt sie
+  bewusst nicht neu: Die rote Meldung ist die einzige Spur.
+- **Das Aufspielen dauert nur noch einen Bruchteil.** Gemessen auf dem Server:
+  - Der Bau eines Updates, bei dem sich nur das Programm geändert hat, dauert
+    **0,98 s statt 27 s**. Die Abhängigkeiten wurden bei jedem Bau neu aus dem
+    Netz installiert (18,9 s) und als 56-MB-Schicht neu exportiert (8 s),
+    obwohl sich an `requirements.txt` seit Wochen nichts geändert hatte. Der
+    heruntergeladene Vorrat bleibt jetzt liegen. Ändert sich doch einmal etwas
+    an den Abhängigkeiten, installiert pip **aus dem Vorrat statt aus dem
+    Netz** — nachgemessen: 78 Pakete aus dem Vorrat, kein einziger Download.
+  - Die Wache sieht **viermal pro Minute** nach statt einmal. Aus „bis zu 60
+    Sekunden, bis überhaupt etwas passiert" wurden gemessene **7 bis 8**.
+  - Neu: `.dockerignore`. Der Baukontext war bisher der ganze Instanzordner —
+    samt Datenbank, bis zu fünf vollständigen Sicherungen und der `.env` mit
+    allen Zugängen. Die hat im Baukontext nichts verloren.
+  - Die Sicherungen verlinken jetzt, was sich nicht geändert hat
+    (`rsync --link-dest`), statt es fünfmal zu kopieren.
+  - Das Warten auf die wieder erreichbare Seite fragt sekündlich statt alle
+    drei Sekunden.
+- **Das Update-Log schreibt Uhrzeiten.** Ohne sie liess sich nicht mehr
+  feststellen, welcher Schritt die Zeit gekostet hat — die Dauer musste aus
+  Ordnernamen und dem Docker-Journal zusammengesucht werden.
+
+- **Eine neue Version fällt jetzt sofort auf.** Bisher wusste nur der Server
+  davon: Eine Wache auf dem Host holte den Stand per `git fetch` — angestoßen
+  von Hand oder einmal täglich. Zwischen einer Veröffentlichung und dem Hinweis
+  im Dashboard lag damit im Normalfall ein ganzer Tag. Jetzt liest das
+  Dashboard die Datei `VERSION` selbst aus dem Repo und vergleicht die Nummer;
+  gemessen 0,03 Sekunden. Das **Aufspielen** bleibt unverändert bei der Wache —
+  dafür braucht es Rechte, die im Container nichts zu suchen haben.
+  - „Nachsehen" prüft sofort, statt eine Anforderung abzulegen, auf die eine
+    Wache erst in der nächsten Minute stößt.
+  - Verglichen werden **Zahlen, keine Zeichenketten**: Als Text wäre `1.3.9`
+    größer als `1.3.10`, und das Update wäre ab der zehnten Korrektur
+    unsichtbar geworden.
+  - Der frische Vergleich schlägt die Zustandsdatei. Nach einem Aufspielen
+    stand dort noch „liegt bereit", obwohl die Nummern längst gleich waren.
+  - Ist GitHub nicht erreichbar, bleibt es beim zuletzt bekannten Stand —
+    ohne Fehlermeldung auf einer Seite, an der niemand etwas reparieren kann.
+  - Der Update-Kasten war beim zweiten Öffnen der Einstellungen ein Standbild.
+  - `deploy/update-einrichten.sh` richtet den täglichen Prüflauf jetzt mit ein.
+    Er stand bisher nur von Hand im Crontab — und wäre beim nächsten Einrichten
+    stillschweigend gelöscht worden.
+
 ## 1.3.1 — 12.09.2026
 
 - **Bank-Abgleich: Der Haken zählt jetzt überall.** Kopfkachel und

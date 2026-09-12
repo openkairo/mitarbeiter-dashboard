@@ -1,0 +1,17 @@
+# Was Docker beim Bauen NICHT einlesen soll.
+#
+# Der Baukontext ist der ganze Instanzordner. Ohne diese Datei wandern die
+# Datenbank und bis zu fuenf vollstaendige Sicherungen des Programms in jeden
+# Bau — die frischeste davon wird unmittelbar vorher angelegt. Und die .env
+# mit saemtlichen Zugaengen hat im Baukontext ohnehin nichts verloren.
+.env
+.env.*
+data/
+.vorher/
+docs/
+leer/
+.git/
+__pycache__/
+*.pyc
+*.sqlite3
+deploy/
