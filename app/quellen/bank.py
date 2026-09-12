@@ -24,7 +24,11 @@ TITEL = "Bank-Abgleich"
 ICON = "🏦"
 TTL = 300
 ANLAUF = 0
-LINK = "https://app.lexoffice.de/permanent/vouchers"
+# Die Bankumsaetze, nicht die Belegliste: Von hier aus wird eine Zahlung
+# zugeordnet, und genau das ist die Arbeit an dieser Karte. Der alte Pfad
+# /permanent/vouchers stammt aus der Lexoffice-Zeit und ist seit der
+# Umbenennung tot — er leitet auf app.lexware.de weiter und endet dort im 404.
+LINK = "https://app.lexware.de/fis/app/transactions"
 LINK_TEXT = "Lexware"
 # "Posten" gibt es absichtlich nicht mehr als Kennzahl (siehe unten) —
 # damit faellt die Kopfkachel auf die Zahl der OFFENEN Posten zurueck.

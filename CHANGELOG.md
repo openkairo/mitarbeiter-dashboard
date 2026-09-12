@@ -14,6 +14,20 @@ jedem einzelnen Arbeitsschritt.
 
 *Zurzeit nichts.*
 
+## 1.4.1 — 12.09.2026
+
+- **Alle Lexware-Links führten ins Leere.** Sie zeigten auf Pfade unter
+  `app.lexoffice.de/permanent/…` — seit der Umbenennung leitet das auf
+  `app.lexware.de` weiter und endet dort mit **404**. Ersetzt:
+  - Die **Bank-Karte** geht jetzt auf die **Bankumsätze**
+    (`/fis/app/transactions`). Von dort wird eine Zahlung zugeordnet, und
+    genau das ist die Arbeit an dieser Karte.
+  - Die **Rechnungs-Karte** geht auf die Belegliste, jede Zeile direkt auf
+    ihren Beleg. Die Belegansicht ist eine Web-Anwendung — der Weg zum
+    einzelnen Beleg steht hinter dem `#` und erreicht den Server nie. Durch
+    Ausprobieren war der richtige Pfad deshalb nicht zu finden: Unter
+    `/vouchers` antwortet **jede** Adresse mit 200.
+
 ## 1.4.0 — 12.09.2026
 
 Diese Fassung repariert das Aktualisieren selbst. Bisher dauerte es im

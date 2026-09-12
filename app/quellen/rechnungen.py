@@ -37,8 +37,18 @@ ANLAUF = 8
 # sie gar nicht erst, statt „nichts zu tun“ zu behaupten.
 BRAUCHT = ("LEXWARE_API_KEY",)
 
-LINK = "https://app.lexoffice.de/permanent/vouchers"
+LINK = "https://app.lexware.de/vouchers#!/VoucherList"
 LINK_TEXT = "Lexware"
+# Die Belegansicht von Lexware ist eine Web-Anwendung: Der Weg zum einzelnen
+# Beleg steht hinter dem "#", erreicht den Server also gar nicht. Die Belegart
+# gehoert in den Pfad — hier immer SalesInvoice, weil die Karte ausschliesslich
+# invoice und salesinvoice holt (siehe lexware.belegliste).
+#
+# Der alte Pfad /permanent/voucher/<id> stammt aus der Lexoffice-Zeit und ist
+# seit der Umbenennung tot: Er leitet auf app.lexware.de weiter und endet dort
+# im 404. Zu erkennen war das nicht durch Ausprobieren — unter /vouchers
+# antwortet jede Adresse mit 200, weil dort die Anwendung ausgeliefert wird.
+BELEG_LINK = "https://app.lexware.de/vouchers#!/VoucherList//SalesInvoice/{}?filter=lastedited"
 
 VERKAUF = re.compile(r"^(RE|SG)-", re.IGNORECASE)
 FENSTER_TAGE = 400
@@ -94,7 +104,7 @@ def fetch(env: dict) -> dict:
             datum=(b.get("voucherDate") or "")[:10] or None,
             text=nummer,
             marke=marke,
-            link=f"https://app.lexoffice.de/permanent/voucher/{b.get('id')}",
+            link=BELEG_LINK.format(b.get("id") or ""),
             zusatz={"faellig": faellig, "tage": ueberfaellig_seit,
                     "brutto": b.get("totalAmount")},
         ))
