@@ -29,6 +29,7 @@ ueber die API gar nicht erreichbar. Dafuer gibt es nur den Direktlink.
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
@@ -94,6 +95,75 @@ def _hat_nachrichten(kennung: str, key: str) -> bool:
         return fehler.code != 400
     except Exception:                                             # noqa: BLE001
         return True            # im Zweifel anzeigen — lieber zu viel als verschluckt
+
+
+MAX_EXPORTE = 15          # je Abruf hoechstens so viele neue Export-Auftraege
+INHALT_ZEICHEN = 600
+
+
+def _mail_text(roh: bytes) -> str:
+    """Den Text der ersten Mail aus dem Export-ZIP, ohne HTML."""
+    import html as _html
+    import io
+    import re
+    import zipfile
+    with zipfile.ZipFile(io.BytesIO(roh)) as z:
+        namen = sorted(n for n in z.namelist() if n.startswith("emails/") and n.endswith(".html"))
+        if not namen:
+            return ""
+        seite = z.read(namen[0]).decode("utf-8", "replace")
+    seite = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", seite, flags=re.S | re.I)
+    seite = re.sub(r"<br[^>]*>|</p>|</div>|</tr>|</li>|</h\d>", "\n", seite, flags=re.I)
+    text = _html.unescape(re.sub(r"<[^>]+>", "", seite))
+    return re.sub(r"\s*\n\s*", "\n", text).strip()[:INHALT_ZEICHEN]
+
+
+def _inhalte(gespraeche: list, key: str) -> dict:
+    """Was in den Mail-Gespraechen steht — je Gespraech einmal geholt.
+
+    An Nachrichtentexte kommt man nur ueber den Export: Auftrag anlegen, rund
+    eine Minute warten, ZIP holen. Das passt nicht in einen Abruf. Deshalb in
+    zwei Schritten ueber zwei Abrufe: Dieser legt die Auftraege an und merkt
+    sich ihre Nummern, der naechste holt ab, was fertig ist. Ein neues
+    Gespraech zeigt seinen Inhalt also erst beim zweiten Abruf.
+
+    Nur fuer Mail-Gespraeche (dort liegt die Mail als HTML im ZIP) und nur,
+    wenn SUPERCHAT_INHALT gesetzt ist: Wer das nicht braucht, soll keine
+    Export-Auftraege erzeugen und keine Nachrichtentexte speichern.
+    """
+    inhalte = _merker("superchat_inhalt")
+    wartend = _merker("superchat_export")
+    offen = {g.get("id") for g in gespraeche}
+    # Was nicht mehr offen ist, wird vergessen — Texte bleiben nicht liegen.
+    inhalte = {k: v for k, v in inhalte.items() if k in offen}
+    wartend = {k: v for k, v in wartend.items() if k in offen}
+    neu = 0
+    for g in gespraeche:
+        kennung = g.get("id")
+        if kennung in inhalte or (g.get("channel") or {}).get("type") != "mail":
+            continue
+        try:
+            if kennung in wartend:
+                stand = _hole(f"/conversations/{kennung}/export/{wartend[kennung]}", key)
+                if stand.get("status") == "done" and (stand.get("link") or {}).get("url"):
+                    with urllib.request.urlopen(stand["link"]["url"], timeout=TIMEOUT) as antwort:
+                        inhalte[kennung] = _mail_text(antwort.read())
+                    del wartend[kennung]
+                elif stand.get("status") == "failed":
+                    del wartend[kennung]
+            elif neu < MAX_EXPORTE:
+                req = urllib.request.Request(
+                    f"{API}/conversations/{kennung}/export", method="POST",
+                    headers={"X-API-KEY": key, "Content-Type": "application/json"},
+                    data=json.dumps({"start": "2020-01-01T00:00:00Z"}).encode())
+                with urllib.request.urlopen(req, timeout=TIMEOUT) as antwort:
+                    wartend[kennung] = json.loads(antwort.read().decode()).get("id") or ""
+                neu += 1
+        except Exception:                                         # noqa: BLE001
+            wartend.pop(kennung, None)     # beim naechsten Abruf neu versuchen
+    db.kv_schreiben("superchat_inhalt", json.dumps(inhalte, ensure_ascii=False))
+    db.kv_schreiben("superchat_export", json.dumps(wartend, ensure_ascii=False))
+    return inhalte
 
 
 def _name(kontakt_id: str, key: str, zwischen: dict) -> str:
@@ -276,6 +346,11 @@ def fetch(env: dict) -> dict:
     erstsicht = _merker("superchat_erstsicht")
     heute = datetime.now().date().isoformat()
 
+    # Die Einstellung steht nur in der .env (kein Feld in der Oberflaeche), deshalb der Rueckgriff.
+    mit_inhalt = (env.get("SUPERCHAT_INHALT") or os.environ.get("SUPERCHAT_INHALT")
+                  or "").strip().lower() in ("1", "ja", "true")
+    inhalte = {}
+
     liste = []
     for g in gespraeche:
         kennung = g.get("id")
@@ -311,12 +386,28 @@ def fetch(env: dict) -> dict:
             text=f"offen im Postfach {fach_name}"
                  + (f" · {kanal.replace('_', '')}" if kanal else ""),
             marke=marke,
-            # Der Link traegt das Postfach des Gespraechs, nicht das erste der
-            # Liste — sonst landet ein Klick im falschen Postfach.
-            link=f"https://app.superchat.de/inbox/{fach_id}?conversationId={kennung}",
+            # Im Pfad steht die GESPRAECHS-Kennung, nicht die des Postfachs.
+            # Am 03.10.2026 im angemeldeten Browser nachgemessen:
+            #   /inbox/<gespraech>?conversationId=<gespraech>  -> Gespraech offen
+            #   /inbox/<postfach>?conversationId=<gespraech>   -> "Keine
+            #       Unterhaltung ausgewaehlt"; Superchat wirft den Anhang weg
+            #   /inbox/<gespraech>                             -> Gespraech offen,
+            #       Superchat haengt den Anhang von selbst an
+            # Die Bedeutung steckt also im Pfad, nicht im Anhang. Der Anhang
+            # bleibt trotzdem stehen: Genau so schreibt Superchat die Adresse
+            # selbst, und wer sie vergleicht, soll dasselbe sehen.
+            link=f"https://app.superchat.de/inbox/{kennung}?conversationId={kennung}",
             zusatz={"alter": alter, "postfach": fach_name,
                     "gemessen": "letzte Nachricht" if aktiv else "erste Sichtung"},
         ))
+
+    if mit_inhalt:
+        # Nach der Liste, damit nur echte Gespraeche (keine Huellen) Auftraege ausloesen.
+        echte = {p["id"] for p in liste}
+        inhalte = _inhalte([g for g in gespraeche if g.get("id") in echte], key)
+        for p in liste:
+            if inhalte.get(p["id"]):
+                p["zusatz"]["inhalt"] = inhalte[p["id"]]
 
     db.kv_schreiben("superchat_huellen", json.dumps(huellen, ensure_ascii=False))
     db.kv_schreiben("superchat_namen", json.dumps(namen, ensure_ascii=False))
@@ -343,13 +434,17 @@ def fetch(env: dict) -> dict:
         # behandelt, will es auch bevorzugt sehen — und das weiss nur, wer das
         # Dashboard einrichtet, nicht der Quelltext.
         "postfach_farben": _farbwuensche(env),
-        # Fusslink nur, wenn es EIN Postfach gibt. Bei mehreren fuehrte er fuer
-        # die Haelfte der Zeilen ins falsche — dann lieber keiner, die Zeilen
-        # verlinken selbst.
-        "link": (f"https://app.superchat.de/inbox/{postfaecher[0]}"
-                 if len(postfaecher) == 1 else None),
-        "link_text": (f"Postfach {fach_namen[postfaecher[0]]}"
-                      if len(postfaecher) == 1 else None),
+        # Ein bestimmtes Postfach laesst sich NICHT verlinken: Superchat haelt
+        # die Auswahl nur intern. Am 03.10.2026 nachgemessen — die Adresse von
+        # /inbox/<postfach> faellt sofort auf /inbox zusammen, und geoeffnet
+        # wird das zuletzt benutzte Postfach; auch beim Klick in der Seiten-
+        # leiste bleibt die Adresse /inbox. Ein Link "Postfach BEZAHLEN
+        # oeffnen" waere damit ein Versprechen, das die Adresse nicht halten
+        # kann. Deshalb der schlichte Weg in den Posteingang, ehrlich
+        # beschriftet — und der gilt fuer ein Postfach wie fuer zehn.
+        # Die einzelnen Zeilen treffen ihr Gespraech weiterhin genau.
+        "link": "https://app.superchat.de/inbox",
+        "link_text": "Superchat",
         # Kein Dauerhinweis mehr (entschieden am 09.09.2026): Ein Satz, der bei jedem
         # Laden gleich dasteht, wird nach dem zweiten Mal nicht mehr gelesen
         # und kostet nur Platz. Dass Teamchats über die API nicht erreichbar

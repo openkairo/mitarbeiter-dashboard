@@ -14,6 +14,43 @@ jedem einzelnen Arbeitsschritt.
 
 *Zurzeit nichts.*
 
+## 1.5.0 — 03.10.2026
+
+Zwei kaputte Links in der Superchat-Karte — beide im angemeldeten Browser
+nachgemessen, nicht geraten — und drei Angaben mehr für angeschlossene
+Anzeigen. **Bestehende Instanzen müssen nichts nachtragen:** Die neuen
+Einstellungen sind leer wirkungslos.
+
+- **Superchat: Die Zeilen führten ins Postfach, nicht ins Gespräch.** Im Pfad
+  stand die Kennung des Postfachs — damit öffnete sich das Postfach mit
+  „Keine Unterhaltung ausgewählt", und der angehängte `conversationId` wurde
+  verworfen. Die Bedeutung steckt im Pfad: Dort gehört die Gesprächs-Kennung
+  hin, dann landet ein Klick im Gespräch. Im angemeldeten Browser in allen
+  drei Spielarten nachgemessen.
+- **Superchat: Der Fußlink versprach ein Postfach, das er nicht öffnen kann.**
+  Ein bestimmtes Postfach lässt sich gar nicht verlinken — Superchat hält die
+  Auswahl nur intern: `/inbox/<postfach>` fällt sofort auf `/inbox` zusammen
+  und zeigt das **zuletzt benutzte** Postfach; selbst beim Klick in der
+  Seitenleiste bleibt die Adresse `/inbox`. „Postfach … öffnen" war damit ein
+  Versprechen, das die Adresse nicht halten kann. Der Link heißt jetzt
+  schlicht **„Superchat"** und führt in den Posteingang — dafür gibt es ihn
+  wieder bei **jeder** Zahl von Postfächern, nicht nur bei genau einem.
+
+- **Kalender: das Anliegen aus der Terminbuchung.** Buchungsseiten schreiben
+  die Antworten des Kunden als Zeilen „Frage: Antwort" in die Beschreibung.
+  Steht der Wortlaut der Frage in `KALENDER_ANLIEGEN`, liefert die Karte die
+  Antwort je Termin als `zusatz.anliegen` mit. Ohne Angabe ändert sich nichts.
+  Die Oberfläche zeigt es noch nicht an; genutzt wird es von angeschlossenen
+  Anzeigen.
+- **Kalender: Endzeit je Termin.** `zusatz.bis` nennt bei Terminen mit Uhrzeit
+  das Ende („14:00"). Damit lässt sich der laufende Termin erkennen.
+- **Superchat: Inhalt von Mail-Gesprächen.** Mit `SUPERCHAT_INHALT=1` holt die
+  Karte je offenem Mail-Gespräch einmal den Text der Mail über den
+  Gesprächs-Export und liefert ihn als `zusatz.inhalt` mit. Der Export braucht
+  rund eine Minute, deshalb erscheint der Inhalt erst beim zweiten Abruf. Texte
+  geschlossener Gespräche werden wieder vergessen. Ohne die Einstellung
+  entstehen keine zusätzlichen Export-Aufträge.
+
 ## 1.4.3 — 13.09.2026
 
 Drei Korrekturen an der Update-Anzeige aus 1.4.0 — der Server erkannte eine

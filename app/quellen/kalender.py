@@ -69,6 +69,29 @@ HERVORHEBEN = {wort: HERVORHEBEN_ALLE.get(wort, wort.capitalize())
 RE_HERVOR = {wort: re.compile(wort, re.IGNORECASE) for wort in HERVORHEBEN}
 
 
+def _anliegen(beschreibung: str, env: dict) -> str:
+    """Was der Kunde bei der Terminbuchung selbst geschrieben hat.
+
+    Buchungsseiten legen ihre Fragen als Zeilen "Frage: Antwort" in die
+    Beschreibung. Welche Frage das Anliegen traegt, weiss nur, wer die
+    Buchungsseite eingerichtet hat — deshalb steht ihr Wortlaut (oder sein
+    Ende) in KALENDER_ANLIEGEN und nicht hier. Ohne Angabe gibt es kein
+    Anliegen: Die ganze Beschreibung waere bei gebuchten Terminen vor allem
+    Kleingedrucktes.
+    """
+    frage = (env.get("KALENDER_ANLIEGEN") or os.environ.get("KALENDER_ANLIEGEN") or "").strip()
+    if not frage or not beschreibung:
+        return ""
+    for zeile in beschreibung.replace("<br>", "\n").splitlines():
+        ort = zeile.lower().find(frage.lower())
+        if ort >= 0:
+            # Hinter der Frage steht ein Doppelpunkt, davor gern noch ein
+            # Smiley oder Fragezeichen ("... vorbereitet sind :): Antwort").
+            rest = re.sub(r"<[^>]+>", "", zeile[ort + len(frage):])
+            return re.sub(r"^[\s:;()?!.-]+", "", rest).strip()[:200]
+    return ""
+
+
 SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 # Wohin die Anmeldung geht. Als Konstante, damit die Pruefung sie im Test auf
 # einen eigenen Mini-Server umbiegen kann — sonst liesse sich der Tausch von
@@ -320,6 +343,10 @@ def fetch(env: dict) -> dict:
             link=t.get("htmlLink"),
             zusatz={"zeit": wann, "heute": laeuft_heute,
                     "abholung": hervor == "abhol", "art": hervor,
+                    "anliegen": _anliegen(beschreibung, env),
+                    # Bis wann der Termin geht: Eine Anzeige kann damit den
+                    # laufenden Termin vom naechsten unterscheiden.
+                    "bis": "" if ganztags else ende.strftime("%H:%M"),
                     "sortier": beginn.isoformat()},
         ))
 
